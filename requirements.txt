@@ -1,0 +1,4 @@
+python-bitcoinlib
+simplejson
+pyzmq
+pycrypto
