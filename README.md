@@ -1,13 +1,14 @@
 # TumbleBit
 
-Proof of Concept implementation of TumbleBit as a Classic Tumbler. We will be posting a development roadmap shortly.
+Proof of Concept implementation of TumbleBit as an untrusted [classic tumbler](https://en.wikipedia.org/wiki/Cryptocurrency_tumbler) as described in: ["TumbleBit: An Untrusted Bitcoin-Compatible Anonymous Payment Hub"](https://eprint.iacr.org/2016/575). 
 
-#### [Paper](https://eprint.iacr.org/2016/575) Abstract
->This paper presents TumbleBit, a new anonymous payments protocol that is fully compatible with today’s Bitcoin protocol. TumbleBit allows parties to make payments through an untrusted Tumbler. No-one, not even the Tumbler, can tell which payer paid which payee during a TumbleBit epoch. TumbleBit consists of two interleaved fair-exchange protocols that prevent theft of bitcoins by cheating users or a malicious Tumbler. Our protocol combines fast cryptographic computations (performed off the blockchain) with standard bitcoin scripting functionalities (on the blockchain) that realize smart contracts. We prove the security of TumbleBit using the ideal/real world paradigm and the random oracle model; while security follows from the standard RSA assumption. We have implemented our protocol and used it to mix payments from several participants on the blockchain. Because our off-blockchain computations run in less than a second, TumbleBit’s performance is limited only by the time it takes to confirm three blocks on the blockchain.
+**Description:** TumbleBit is a new anonymous payments protocol that is fully compatible with today’s Bitcoin protocol. TumbleBit allows parties to make payments through an untrusted Tumbler. No-one, not even the Tumbler, can tell which payer paid which payee during a TumbleBit epoch. TumbleBit consists of two interleaved fair-exchange protocols that prevent theft of bitcoins by cheating users or a malicious Tumbler. TumbleBit combines fast cryptographic computations (performed off the blockchain) with standard bitcoin scripting functionalities (on the blockchain) that realize smart contracts. TumbleBit was used to mix [800 input addresses](https://blockchain.info/tx/fd51bd844202ef050f1fbe0563e3babd2df3c3694b61af39ac811ad14f52b233) to [800 output addresses](https://blockchain.info/tx/8520da7116a1e634baf415280fdac45f96e680270ea06810512531a783f0c9f6) on Bitcoin's blockchain. 
+
+We will be posting a development roadmap shortly.
 
 ----
 ### Warning
-This code is very early in its development (experimental pre-alpha) and is currently not ready for production.
+This code is very early in its development (proof-of-concept phase) and is currently not ready for production.
 
 * Don't use the default keys if you plan on posting transactions on testnet or mainnet.
 * We have not audited this code for vulnerabilities and we are actively fixing memory corruption vulnerabilities.
