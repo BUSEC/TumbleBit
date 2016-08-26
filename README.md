@@ -69,4 +69,4 @@ All resulting binaries will be in the _bin_ directory
   + ```./bin/signer_server```
   + ```./bin/alice_client_test```
 
-![tumblebit](https://cloud.githubusercontent.com/assets/274814/18019508/6c081ed8-6baa-11e6-9165-9bd338fda187.png)
+ <!--- ![tumblebit](https://cloud.githubusercontent.com/assets/274814/18019508/6c081ed8-6baa-11e6-9165-9bd338fda187.png) -->
