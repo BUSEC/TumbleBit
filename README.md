@@ -6,6 +6,8 @@ Proof of Concept implementation of TumbleBit as an untrusted [classic tumbler](h
 
 We will be posting a development roadmap shortly.
 
+
+
 ----
 ### Warning
 This code is very early in its development (proof-of-concept phase) and is currently not ready for production.
@@ -66,3 +68,5 @@ All resulting binaries will be in the _bin_ directory
   + ```./python/tx_server.py```
   + ```./bin/signer_server```
   + ```./bin/alice_client_test```
+
+![tumblebit](https://cloud.githubusercontent.com/assets/274814/18019508/6c081ed8-6baa-11e6-9165-9bd338fda187.png)
