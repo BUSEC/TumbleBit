@@ -19,6 +19,39 @@ This code is very early in its development (proof-of-concept phase) and is curre
 * There are known [side channel attacks on ECDSA in openssl](https://www.tau.ac.il/~tromer/mobilesc/).
 
 ---
+
+### Road Map
+Road map for TumbleBit software development. Given the early nature of TumbleBit development the roadmap should be viewed as a rough guide and is likely to be updated and changed as development continues.
+
+#### Phase 1: Code Safety and Testing
++ [ ] Move as much code as possible into python for improved memory safety.
++ [ ] Modularize code to allow our core protocol to be used in other settings.
++ [ ] Replace openssl-ECDSA with libsecp256k1.
+
+#### Phase 2: Server Features
++ [ ] Payment Hub support.
++ [ ] Misbehavior reactive server and client.
++ [ ] Session Management and parallelization.
++ [ ] TOR integration.
++ [ ] Standardized REST Interface.
+
+#### Phase 3: Usability and Wallets
++ [ ] Wallet Prototype.
++ [ ] Classic Tumbler Wallet integration.
++ [ ] Payment Hub Wallet integration.
++ [ ] Wallet to wallet demo.
+
+#### Phase 4: Operational Concerns
++ [ ] Monitoring.
++ [ ] Audit and test at-scale deployment.
++ [ ] Assess, test and mitigate server compromise risks.
++ [ ] Release ops guide.
+
+#### Phase 5: Alpha Release
++ [ ] User guides and documentation.
++ [ ] Wallet binaries.
+
+----
 ### Dependencies
 
 - LibreSSL Version 2.3.4 or higher
