@@ -230,7 +230,7 @@ _ssl.PEM_read_RSAPrivateKey.argtypes = [ctypes.c_void_p, ctypes.c_void_p,
 ## Helpers
 ###########################################################################
 
-def _free_bn(self, x):
+def _free_bn(x):
     if x is not None:
         _ssl.BN_free(x)
 

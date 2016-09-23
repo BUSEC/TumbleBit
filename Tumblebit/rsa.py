@@ -1,27 +1,30 @@
 import logging
+import ctypes
 from Crypto.Util import asn1
+
+from tumblebit import _ssl, _libc, _free_bn, RSA_F4, RSA_NO_PADDING, BNToBin
 
 
 class RSA:
-
     def __init__(self, path, suffix):
         self.key = _ssl.RSA_new()
         self.path = path
         self.suffix = suffix
+        self.sig_len = 0
         self.bn_n = None
         self.blinding = None
 
         e = ctypes.c_ulong(RSA_F4)
-        bn_e = _ssl.BN_new()
-        if _ssl.BN_set_word(bn_e, e) != 1:
+        self.bn_e = _ssl.BN_new()
+        if _ssl.BN_set_word(self.bn_e, e) != 1:
             logging.debug('Failed to set exponent')
-            _ssl.BN_free(bn_e)
+            _ssl.BN_free(self.bn_e)
 
         self.bn_list = [self.bn_n, self.bn_e]
 
     def __del__(self):
         _ssl.RSA_free(self.key)
-        [_free_bn(x) for x i self.bn_list]
+        [_free_bn(x) for x in self.bn_list]
 
     def _get_mod(self):
         buf = ctypes.create_string_buffer(1024)
@@ -33,15 +36,22 @@ class RSA:
 
         # Convert to bn
         self.bn_n = _ssl.BN_new()
-        seq_bytes = seq[0].to_bytes(256, byteorder='big')
+        seq_bytes = ctypes.c_char_p(seq[0].to_bytes(256, byteorder='big'))
 
-        return _ssl.BN_bin2bn(ctypes.c_char_p(seq_bytes), len(seq_bytes), bn_n)
+        return _ssl.BN_bin2bn(seq_bytes, self.sig_len, self.bn_n)
 
     def generate(self, bits):
+
+        if bits % 8 != 0:
+            return False
 
         if _ssl.RSA_generate_key_ex(self.key, bits, self.bn_e, None) != 1:
             logging.debug("Failed to generate rsa Key")
             return False
+
+        self.sig_len = _ssl.RSA_size(self.key)
+
+        self._get_mod
 
         return True
 
@@ -62,20 +72,20 @@ class RSA:
         file_path = self.path + "/private_%s.pem" % self.suffix
         file_path = file_path.encode('utf-8')
 
-        bp_public = _ssl.BIO_new_file(ctypes.c_char_p(file_path),
-                                      ctypes.c_char_p(b"w+"))
+        bp_private = _ssl.BIO_new_file(ctypes.c_char_p(file_path),
+                                       ctypes.c_char_p(b"w+"))
         if _ssl.PEM_write_bio_RSAPrivateKey(bp_private, self.key, None, None,
                                             0, None, None) != 1:
             logging.debug("Failed to write RSA Private Key")
             return False
 
-        _ssl.BIO_free_all(bp_public)
+        _ssl.BIO_free_all(bp_private)
         return True
 
     def load_public_key(self, from_private=False):
         file_path = self.path + "/public_%s.pem" % self.suffix
         file_path = file_path.encode('utf-8')
-        p_file = _libc.fopen(ctypes.c_char_p(file_path.encode('utf-8')),
+        p_file = _libc.fopen(ctypes.c_char_p(file_path),
                              ctypes.c_char_p(b"r"))
 
         _ssl.PEM_read_RSAPublicKey(p_file, ctypes.byref(self.key), None, None)
@@ -84,7 +94,7 @@ class RSA:
         _libc.fclose(p_file)
 
         # Turn on blinding
-        if _ssl.RSA_blinding_on(self.key, None) != 1:
+        if not from_private and _ssl.RSA_blinding_on(self.key, None) != 1:
             logging.debug('Failed to turn on blinding for RSA key')
             return False
 
@@ -93,13 +103,14 @@ class RSA:
 
         return True
 
-    def load_private_key(self, path):
+    def load_private_key(self):
         # Load public key
-        self.load_public_key(path, from_private=True)
+        self.load_public_key(from_private=True)
 
         file_path = self.path + "/private_%s.pem" % self.suffix
         file_path = file_path.encode('utf-8')
-        p_file = _libc.fopen(ctypes.c_char_p(file_path.encode('utf-8')),
+
+        p_file = _libc.fopen(ctypes.c_char_p(file_path),
                              ctypes.c_char_p(b"r"))
 
         _ssl.PEM_read_RSAPrivateKey(p_file, ctypes.byref(self.key), None, None)
@@ -114,124 +125,134 @@ class RSA:
 
         return True
 
-        def sign(self, msg):
-            sig = ctypes.create_string_buffer(sig_len)
+    def sign(self, msg):
+        if len(msg) != self.sig_len:
+            return None
 
-            if _ssl.RSA_private_encrypt(len(msg), ctypes.c_char_p(msg), sig,
-                                        self.key, RSA_NO_PADDING) == -1:
-                return None
+        sig = ctypes.create_string_buffer(self.sig_len)
 
-            return sig.raw[:sig_len]
+        if _ssl.RSA_private_encrypt(len(msg), ctypes.c_char_p(msg), sig,
+                                    self.key, RSA_NO_PADDING) == -1:
+            return None
 
-        def verify(self, msg, sig):
-            decrypted = ctypes.create_string_buffer(sig_len)
+        return sig.raw[:self.sig_len]
 
-            if _ssl.RSA_public_decrypt(len(sig), sig, decrypted, self.key,
-                                       RSA_NO_PADDING) != len(msg):
-                return None
+    def verify(self, msg, sig):
+        if len(msg) != len(sig):
+            return None
 
-            return decrypted[:sig_len] == msg
+        decrypted = ctypes.create_string_buffer(self.sig_len)
 
-        def setup_blinding(r):
-            ctx = _ssl.BN_CTX_new()
-            _ssl.BN_CTX_start(ctx)
+        if _ssl.RSA_public_decrypt(len(sig), sig, decrypted, self.key,
+                                   RSA_NO_PADDING) != len(msg):
+            return None
 
-            bn_A = _ssl.BN_new()
-            bn_Ai = _ssl.BN_new()
-            bn_r = _ssl.BN_new()
-            free = [bn_A, bn_Ai, bn_r]
+        return decrypted[:self.sig_len] == msg
 
-            # Convert r to bn
-            _ssl.BN_bin2bn(ctypes.c_char_p(r), len(r), bn_r)
+    def setup_blinding(self, r):
+        ctx = _ssl.BN_CTX_new()
+        _ssl.BN_CTX_start(ctx)
 
-            # Invert r
-            bn_Ai = _ssl.BN_mod_inverse(bn_Ai, bn_r, self.bn_n, ctx)
+        bn_A = _ssl.BN_new()
+        bn_Ai = _ssl.BN_new()
+        bn_r = _ssl.BN_new()
+        free = [bn_A, bn_Ai, bn_r]
 
-            if _ssl.BN_mod_exp(bn_A, bn_r, self.e, self.n, ctx) != 1:
-                logging.debug("Failed to get r^pk")
-                [self._free_bn(x) for x in free]
-                _ssl.BN_CTX_end(ctx)
-                _ssl.BN_CTX_free(ctx)
-                return False
+        # Convert r to bn
+        _ssl.BN_bin2bn(ctypes.c_char_p(r), len(r), bn_r)
 
-            # Setup blinding
-            self.blind = _ssl.BN_BLINDING_new(bn_A, bn_Ai, self.bn_n)
+        # Invert r
+        bn_Ai = _ssl.BN_mod_inverse(bn_Ai, bn_r, self.bn_n, ctx)
 
-            # Cleanup
-            [self._free_bn(x) for x in free]
+        if _ssl.BN_mod_exp(bn_A, bn_r, self.bn_e, self.bn_n, ctx) != 1:
+            logging.debug("Failed to get r^pk")
+            [_free_bn(x) for x in free]
             _ssl.BN_CTX_end(ctx)
             _ssl.BN_CTX_free(ctx)
+            return False
 
-            def blind(self, blinding, msg):
-                ctx = _ssl.BN_CTX_new()
-                _ssl.BN_CTX_start(ctx)
+        # Setup blinding
+        self.blinding = _ssl.BN_BLINDING_new(bn_A, bn_Ai, self.bn_n)
 
-                f = _ssl.BN_CTX_get(ctx)
-                _ssl.BN_bin2bn(ctypes.c_char_p(msg), len(msg), f)
+        # Cleanup
+        [_free_bn(x) for x in free]
+        _ssl.BN_CTX_end(ctx)
+        _ssl.BN_CTX_free(ctx)
 
-                if _ssl.BN_BLINDING_convert_ex(f, None, self.blind, ctx) != 1:
-                    logging.debug("Failed to blind msg")
-                    _ssl.BN_free(f)
-                    _ssl.BN_CTX_end(ctx)
-                    _ssl.BN_CTX_free(ctx)
-                    return None
+        return True
 
-                blinded_msg = ctypes.create_string_buffer(self.sig_len)
-                BNToBin(f, blinded_msg, self.sig_len)
+    def blind(self, msg):
+        print("In blind")
+        ctx = _ssl.BN_CTX_new()
+        _ssl.BN_CTX_start(ctx)
 
-                return blinded_msg.raw
+        f = _ssl.BN_CTX_get(ctx)
+        _ssl.BN_bin2bn(ctypes.c_char_p(msg), len(msg), f)
 
-            def unblind(self, blinding, msg):
-                ctx = _ssl.BN_CTX_new()
-                _ssl.BN_CTX_start(ctx)
+        if _ssl.BN_BLINDING_convert_ex(f, None, self.blinding, ctx) != 1:
+            logging.debug("Failed to blind msg")
+            _ssl.BN_free(f)
+            _ssl.BN_CTX_end(ctx)
+            _ssl.BN_CTX_free(ctx)
+            return None
 
-                f = _ssl.BN_CTX_get(ctx)
-                _ssl.BN_bin2bn(ctypes.c_char_p(msg), len(msg), f)
+        blinded_msg = ctypes.create_string_buffer(self.sig_len)
+        BNToBin(f, blinded_msg, self.sig_len)
 
-                if _ssl.BN_BLINDING_invert_ex(f, None, self.blind, ctx) != 1:
-                    logging.debug("Failed to blind msg")
-                    _ssl.BN_free(f)
-                    _ssl.BN_CTX_end(ctx)
-                    _ssl.BN_CTX_free(ctx)
-                    return None
+        return blinded_msg.raw
 
-                unblinded_msg = ctypes.create_string_buffer(self.sig_len)
-                BNToBin(f, unblinded_msg, self.sig_len)
+    def unblind(self, msg):
+        ctx = _ssl.BN_CTX_new()
+        _ssl.BN_CTX_start(ctx)
 
-                # Cleanup
-                _ssl.BN_free(f)
-                _ssl.BN_CTX_end(ctx)
-                _ssl.BN_CTX_free(ctx)
+        f = _ssl.BN_CTX_get(ctx)
+        _ssl.BN_bin2bn(ctypes.c_char_p(msg), len(msg), f)
 
-                return unblinded_msg.raw
+        if _ssl.BN_BLINDING_invert_ex(f, None, self.blinding, ctx) != 1:
+            logging.debug("Failed to blind msg")
+            _ssl.BN_free(f)
+            _ssl.BN_CTX_end(ctx)
+            _ssl.BN_CTX_free(ctx)
+            return None
 
-                def revert_blind(self, r, msg):
-                    ctx = _ssl.BN_CTX_new()
-                    _ssl.BN_CTX_start(ctx)
+        unblinded_msg = ctypes.create_string_buffer(self.sig_len)
+        BNToBin(f, unblinded_msg, self.sig_len)
 
-                    bn_r = _ssl.BN_CTX_get(ctx)
-                    bn_msg = _ssl.BN_CTX_get(ctx)
-                    free = [bn_r, bn_msg, bn_n, bn_e]
+        # Cleanup
+        _ssl.BN_free(f)
+        _ssl.BN_CTX_end(ctx)
+        _ssl.BN_CTX_free(ctx)
 
-                    _ssl.BN_bin2bn(ctypes.c_char_p(r), len(r), bn_r)
-                    _ssl.BN_bin2bn(ctypes.c_char_p(msg), len(msg), bn_msg)
+        return unblinded_msg.raw
 
-                    _ssl.BN_mod_inverse(bn_r, bn_r, self.bn_n, ctx)
-                    _ssl.BN_mod_exp(bn_r, bn_r, self.bn_e, self.bn_n, ctx)
-                    if _ssl.BN_mod_mul(bn_msg, bn_msg, bn_r, self.bn_n, ctx)
-                    != 1:
-                        logging.debug("Failed to multiply")
-                        [_ssl.BN_free(x) for x in free]
-                        _ssl.BN_CTX_end(ctx)
-                        _ssl.BN_CTX_free(ctx)
-                        return None
+    def revert_blind(self, r, msg):
+        ctx = _ssl.BN_CTX_new()
+        _ssl.BN_CTX_start(ctx)
 
-                    unblinded_msg = ctypes.create_string_buffer(self.sig_len)
-                    BNToBin(bn_msg, unblinded_msg, self.sig_len)
+        bn_r = _ssl.BN_CTX_get(ctx)
+        bn_msg = _ssl.BN_CTX_get(ctx)
+        free = [bn_r, bn_msg]
 
-                    # Cleanup
-                    [_free_bn(x) for x in free]
-                    _ssl.BN_CTX_end(ctx)
-                    _ssl.BN_CTX_free(ctx)
+        _ssl.BN_bin2bn(ctypes.c_char_p(r), len(r), bn_r)
+        _ssl.BN_bin2bn(ctypes.c_char_p(msg), len(msg), bn_msg)
 
-                    return unblinded_msg.raw
+        _ssl.BN_mod_inverse(bn_r, bn_r, self.bn_n, ctx)
+        _ssl.BN_mod_exp(bn_r, bn_r, self.bn_e, self.bn_n, ctx)
+
+        if _ssl.BN_mod_mul(bn_msg, bn_msg, bn_r, self.bn_n, ctx) \
+           != 1:
+            logging.debug("Failed to multiply")
+            [_ssl.BN_free(x) for x in free]
+            _ssl.BN_CTX_end(ctx)
+            _ssl.BN_CTX_free(ctx)
+            return None
+
+        unblinded_msg = ctypes.create_string_buffer(self.sig_len)
+        BNToBin(bn_msg, unblinded_msg, self.sig_len)
+
+        # Cleanup
+        [_free_bn(x) for x in free]
+        _ssl.BN_CTX_end(ctx)
+        _ssl.BN_CTX_free(ctx)
+
+        return unblinded_msg.raw
