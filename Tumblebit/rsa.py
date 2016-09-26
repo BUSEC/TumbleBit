@@ -6,16 +6,47 @@ from tumblebit import _ssl, _libc, _free_bn, RSA_F4, RSA_NO_PADDING, BNToBin
 
 
 class RSA:
-    def __init__(self, path, suffix):
+    """
+    A class that wraps RSA blind signing functionality.
+
+    Messages to be signed have to be the same size as
+    the RSA key.
+
+    Attributes:
+        key: The rsa key
+        size: int - rsa key size
+        is_private: boolean - true if key is a private key
+        bn_n: A bn instance - rsa mod
+        bn_e: A bn instance - rsa exponent
+        blinding: A BN_Blinding instance - blinding factor to be used
+                  in blind/unblind
+        path: A string - path to folder where key is saved/loaded
+        suffix: Suffix added to key name (public_suffix.pem/private_suffix.pem)
+    """
+
+    def __init__(self, path="", suffix=""):
+        """
+        Initalizes the RSA class.
+
+        If path and suffix aren't provided, a key can't be saved or load.
+
+        Args:
+            path: The path to the folder that the key should be loaded/saved to
+            suffix: The suffix added to the private and public keys
+                    (e.g. public_suffix.pem)
+        """
+
         self.key = _ssl.RSA_new()
-        self.path = path
-        self.suffix = suffix
-        self.sig_len = 0
+        self.bn_e = _ssl.BN_new()
         self.bn_n = None
         self.blinding = None
+        self.size = 0
+        self.is_private = False
+
+        self.path = path
+        self.suffix = suffix
 
         e = ctypes.c_ulong(RSA_F4)
-        self.bn_e = _ssl.BN_new()
         if _ssl.BN_set_word(self.bn_e, e) != 1:
             logging.debug('Failed to set exponent')
             _ssl.BN_free(self.bn_e)
@@ -23,10 +54,14 @@ class RSA:
         self.bn_list = [self.bn_n, self.bn_e]
 
     def __del__(self):
+        """
+        Frees up attributes
+        """
         _ssl.RSA_free(self.key)
         [_free_bn(x) for x in self.bn_list]
 
     def _get_mod(self):
+        """ Returns the modulus of the RSA key in bn form."""
         buf = ctypes.create_string_buffer(1024)
         pBuf = ctypes.c_char_p(ctypes.addressof(buf))
         n = _ssl.i2d_RSAPublicKey(self.key, ctypes.byref(pBuf))
@@ -38,9 +73,18 @@ class RSA:
         self.bn_n = _ssl.BN_new()
         seq_bytes = ctypes.c_char_p(seq[0].to_bytes(256, byteorder='big'))
 
-        return _ssl.BN_bin2bn(seq_bytes, self.sig_len, self.bn_n)
+        return _ssl.BN_bin2bn(seq_bytes, self.size, self.bn_n)
 
     def generate(self, bits):
+        """
+        Generate RSA key of size bits.
+
+        Args:
+            bits: An int - the size of the key. Has to be divisible by 8.
+
+        Returns:
+            True on success, False otherwise
+        """
 
         if bits % 8 != 0:
             return False
@@ -49,13 +93,24 @@ class RSA:
             logging.debug("Failed to generate rsa Key")
             return False
 
-        self.sig_len = _ssl.RSA_size(self.key)
+        self.size = _ssl.RSA_size(self.key)
 
-        self._get_mod
+        self._get_mod()
+        self.is_private = True
 
         return True
 
     def save_public_key(self):
+        """
+        Saves public key to path.
+
+        Returns:
+            True on success, False otherwise
+        """
+
+        if self.path == '' or self.suffix == '':
+            return False
+
         file_path = self.path + "/public_%s.pem" % self.suffix
         file_path = file_path.encode('utf-8')
 
@@ -69,6 +124,16 @@ class RSA:
         return True
 
     def save_private_key(self):
+        """
+        Saves private key to path.
+
+        Returns:
+            True on success, False otherwise
+        """
+
+        if self.path == '' or self.suffix == '':
+            return False
+
         file_path = self.path + "/private_%s.pem" % self.suffix
         file_path = file_path.encode('utf-8')
 
@@ -83,6 +148,16 @@ class RSA:
         return True
 
     def load_public_key(self, from_private=False):
+        """
+        Loads public key from path.
+
+        Returns:
+            True on success, False otherwise
+        """
+
+        if self.path == '' or self.suffix == '':
+            return False
+
         file_path = self.path + "/public_%s.pem" % self.suffix
         file_path = file_path.encode('utf-8')
         p_file = _libc.fopen(ctypes.c_char_p(file_path),
@@ -98,12 +173,21 @@ class RSA:
             logging.debug('Failed to turn on blinding for RSA key')
             return False
 
-        self.sig_len = _ssl.RSA_size(self.key)
+        self.size = _ssl.RSA_size(self.key)
         self.bn_n = self._get_mod()
 
         return True
 
     def load_private_key(self):
+        """
+        Loads private key and public key from path.
+
+        Returns:
+            True on success, False otherwise
+        """
+
+        if self.path == '' or self.suffix == '':
+            return False
         # Load public key
         self.load_public_key(from_private=True)
 
@@ -123,33 +207,66 @@ class RSA:
             logging.debug('This message should go to the log file')
             return False
 
+        self.is_private = True
+
         return True
 
     def sign(self, msg):
-        if len(msg) != self.sig_len:
+        """
+        Signs msg using rsa private key.
+
+        Args:
+            msg: A string - message to be signed. len(msg) must equal self.size
+
+        Returns:
+            True on success, False otherwise
+        """
+
+        if not self.is_private or len(msg) != self.size:
             return None
 
-        sig = ctypes.create_string_buffer(self.sig_len)
+        sig = ctypes.create_string_buffer(self.size)
 
         if _ssl.RSA_private_encrypt(len(msg), ctypes.c_char_p(msg), sig,
                                     self.key, RSA_NO_PADDING) == -1:
             return None
 
-        return sig.raw[:self.sig_len]
+        return sig.raw[:self.size]
 
     def verify(self, msg, sig):
+        """
+        Verifies the rsa signature of the message
+
+        Args:
+            msg: A string - message to be signed. len(msg) must equal self.size
+            sig: A string - message signature. len(sig) must equal self.size
+
+        Returns:
+            True on success, False otherwise
+        """
         if len(msg) != len(sig):
             return None
 
-        decrypted = ctypes.create_string_buffer(self.sig_len)
+        decrypted = ctypes.create_string_buffer(self.size)
 
         if _ssl.RSA_public_decrypt(len(sig), sig, decrypted, self.key,
                                    RSA_NO_PADDING) != len(msg):
             return None
 
-        return decrypted[:self.sig_len] == msg
+        return decrypted[:self.size] == msg
 
     def setup_blinding(self, r):
+        """
+        Sets up a BN_Blinding structure using r.
+
+        Args:
+            r: A string - random value to used as a blind.
+               len(r) must equal self.size
+
+        Returns:
+            True on success, False otherwise
+        """
+
         ctx = _ssl.BN_CTX_new()
         _ssl.BN_CTX_start(ctx)
 
@@ -182,7 +299,21 @@ class RSA:
         return True
 
     def blind(self, msg):
-        print("In blind")
+        """
+        Blinds a msg.
+        setup_blinding() must have been called before with the blinding factor.
+
+        Args:
+            msg: A string - message to be blinded.
+               len(msg) must equal self.size
+
+        Returns:
+            A byte string of the blinded msg on success, None otherwise
+        """
+
+        if self.blinding is None:
+            return None
+
         ctx = _ssl.BN_CTX_new()
         _ssl.BN_CTX_start(ctx)
 
@@ -196,12 +327,26 @@ class RSA:
             _ssl.BN_CTX_free(ctx)
             return None
 
-        blinded_msg = ctypes.create_string_buffer(self.sig_len)
-        BNToBin(f, blinded_msg, self.sig_len)
+        blinded_msg = ctypes.create_string_buffer(self.size)
+        BNToBin(f, blinded_msg, self.size)
 
         return blinded_msg.raw
 
     def unblind(self, msg):
+        """
+        Unblinds a msg.
+        setup_blinding() must have been called before with the blinding factor.
+
+        Args:
+            msg: A string - a blinded message.
+               len(msg) must equal self.size
+
+        Returns:
+            A byte string of the unblinded msg on success, None otherwise
+        """
+        if self.blinding is None:
+            return None
+
         ctx = _ssl.BN_CTX_new()
         _ssl.BN_CTX_start(ctx)
 
@@ -215,8 +360,8 @@ class RSA:
             _ssl.BN_CTX_free(ctx)
             return None
 
-        unblinded_msg = ctypes.create_string_buffer(self.sig_len)
-        BNToBin(f, unblinded_msg, self.sig_len)
+        unblinded_msg = ctypes.create_string_buffer(self.size)
+        BNToBin(f, unblinded_msg, self.size)
 
         # Cleanup
         _ssl.BN_free(f)
@@ -226,6 +371,18 @@ class RSA:
         return unblinded_msg.raw
 
     def revert_blind(self, r, msg):
+        """
+        Removes a blind r from the message.
+
+        Args:
+            r: The blinding factor used on the msg.
+            msg: A string - a blinded message.
+               len(msg) must equal self.size
+
+        Returns:
+            A byte string of the unblinded msg on success, None otherwise
+        """
+
         ctx = _ssl.BN_CTX_new()
         _ssl.BN_CTX_start(ctx)
 
@@ -247,8 +404,8 @@ class RSA:
             _ssl.BN_CTX_free(ctx)
             return None
 
-        unblinded_msg = ctypes.create_string_buffer(self.sig_len)
-        BNToBin(bn_msg, unblinded_msg, self.sig_len)
+        unblinded_msg = ctypes.create_string_buffer(self.size)
+        BNToBin(bn_msg, unblinded_msg, self.size)
 
         # Cleanup
         [_free_bn(x) for x in free]

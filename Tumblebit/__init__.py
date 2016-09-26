@@ -1,5 +1,6 @@
 import ctypes
 import ctypes.util
+import logging
 
 ###########################################################################
 ## CTypes -- Function Definitions
@@ -31,9 +32,12 @@ class LibreSSLException(OSError):
     pass
 
 
+_ssl.SSL_load_error_strings()
+
 # Taken from python-bitcoinlib key.py
 # Thx to Sam Devlin for the ctypes magic 64-bit fix
 def _check_res_void_p(val, func, args):
+    """Checks if the returned pointer is void"""
     if val == 0:
         errno = _ssl.ERR_get_error()
         errmsg = ctypes.create_string_buffer(120)
@@ -44,12 +48,12 @@ def _check_res_void_p(val, func, args):
 
 
 def _print_ssl_error():
+    """Prints out the ssl error"""
     errno = _ssl.ERR_get_error()
     errmsg = ctypes.create_string_buffer(120)
     _ssl.ERR_error_string_n(errno, errmsg, 120)
-    raise OpenSSLException(errno, str(errmsg.value))
+    raise LibreSSLException(errno, str(errmsg.value))
 
-_ssl.SSL_load_error_strings()
 
 #####################################
 ## Constants
@@ -231,15 +235,36 @@ _ssl.PEM_read_RSAPrivateKey.argtypes = [ctypes.c_void_p, ctypes.c_void_p,
 ###########################################################################
 
 def _free_bn(x):
+    """Frees a BN instance if it's not None."""
     if x is not None:
         _ssl.BN_free(x)
 
 
 def BN_num_bytes(bn):
+    """Returns the number of bytes in a BN instance."""
     return (_ssl.BN_num_bits(bn) + 7) // 8
 
 
 def BNToBin(bn, data, data_len):
+    """
+    Converts a bn instance to a byte string of length data_len.
+
+    We make the assumption that all bin representations of BIGNUMs will be the
+    same length. In semi-rare cases the bignum use than data_len bytes.  Such
+    cases mean that less than data_len bytes will be written into bin, thus bin
+    will contain uninitialized values. We fix this by packeting zeros in the
+    front of bignum. Zeros won't impact the magnitude of bin, but will ensure
+    that all bytes are initalized.
+
+    Args:
+        bn: A bn(BIGNUM) instance
+        data: A ctypes string buffer of data_len
+        data_len: An int that represnts the length of the ctypes string buffer
+
+    Returns:
+        A byte string containing the data from bn of size data_len
+
+    """
     if bn is None or data is None:
         return None
 
@@ -252,6 +277,16 @@ def BNToBin(bn, data, data_len):
 
 
 def get_random(bits, mod=None):
+    """
+    Returns a random byte string of size bits/8 bytes.
+
+    Args:
+        bits: An int
+        mod: A BN instance
+    Returns:
+        A byte strings of length bits/8 or None if an error occured
+        If mod is set the random byte string will have a value < mod
+    """
     ctx = _ssl.BN_CTX_new()
     _ssl.BN_CTX_start(ctx)
     r = _ssl.BN_CTX_get(ctx)
@@ -259,16 +294,19 @@ def get_random(bits, mod=None):
 
     if mod:
         if _ssl.BN_rand_range(r, n) == 0:
-            print("get_random: failed to generate random number")
+            logging.debug("get_random: failed to generate random number")
+            return None
 
         while _ssl.BN_gcd(ret, r, n, ctx) != 1:
-            print("R is not a relative prime")
+            logging.debug("R is not a relative prime")
             if _ssl.BN_rand_range(r, n) == 0:
-                print("get_random: failed to generate random number")
+                logging.debug("get_random: failed to generate random number")
+                return None
 
     else:
         if _ssl.BN_rand(r, bits, 0, 1) == 0:
-            print("get_random: failed to generate random number")
+            logging.debug("get_random: failed to generate random number")
+            return None
 
     r_len = BN_num_bytes(r)
     rand = ctypes.create_string_buffer(r_len)

@@ -40,7 +40,7 @@ class TestRSA:
         assert public_rsa.load_public_key() is True
 
     def test_signing(self, private_rsa, public_rsa):
-        rsa_size = public_rsa.sig_len
+        rsa_size = public_rsa.size
 
         # Should get valid sig if msg == rsa_size
         msg = b"01" * (rsa_size // 2)
