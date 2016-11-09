@@ -2,7 +2,39 @@ import logging
 import ctypes
 from Crypto.Util import asn1
 
-from tumblebit import _ssl, _libc, _free_bn, RSA_F4, RSA_NO_PADDING, BNToBin
+from tumblebit import (_ssl, _libc, _free_bn, RSA_F4, RSA_NO_PADDING,
+                       BNToBin, LibreSSLException)
+
+
+class Blind:
+    def __init__(self, r, e, mod):
+        assert r is not None
+        assert e is not None
+        assert mod is not None
+
+        self.r = r
+        self._free = []
+
+        ctx = _ssl.BN_CTX_new()
+        self.bn_r = _ssl.BN_bin2bn(r, len(r), _ssl.BN_new())  # r
+        self.bn_Ai = _ssl.BN_mod_inverse(None, self.bn_r, mod, ctx)  # ri
+
+        self.bn_A = _ssl.BN_new()
+        if _ssl.BN_mod_exp(self.bn_A, self.bn_r, e, mod, ctx) != 1:
+            logging.debug("Failed to get r^pk")
+
+        self.bn_ri = _ssl.BN_new()
+        if _ssl.BN_mod_exp(self.bn_ri, self.bn_Ai, e, mod, ctx) != 1:
+            logging.debug("Failed to get r^pk")
+        _ssl.BN_CTX_free(ctx)
+
+        self._free = [self.bn_r, self.bn_ri, self.bn_A, self.bn_Ai]
+
+    def __del__(self):
+        """
+        Frees up attributes
+        """
+        [_free_bn(x) for x in self._free]
 
 
 class RSA:
@@ -39,7 +71,6 @@ class RSA:
         self.key = _ssl.RSA_new()
         self.bn_e = _ssl.BN_new()
         self.bn_n = None
-        self.blinding = None
         self.size = 0
         self.is_private = False
 
@@ -257,106 +288,80 @@ class RSA:
 
     def setup_blinding(self, r):
         """
-        Sets up a BN_Blinding structure using r.
+        Sets up a Blind using r.
 
         Args:
             r: A string - random value to used as a blind.
                len(r) must equal self.size
 
         Returns:
-            True on success, False otherwise
+            returns a blinding structure on success, None otherwise
         """
 
-        ctx = _ssl.BN_CTX_new()
-        _ssl.BN_CTX_start(ctx)
+        try:
+            return Blind(r, self.bn_e, self.bn_n)
+        except (LibreSSLException, AssertionError) as e:
+            logging.debug("setup_blinding failed.")
+            return None
 
-        bn_A = _ssl.BN_new()
-        bn_Ai = _ssl.BN_new()
-        bn_r = _ssl.BN_new()
-        free = [bn_A, bn_Ai, bn_r]
-
-        # Convert r to bn
-        _ssl.BN_bin2bn(ctypes.c_char_p(r), len(r), bn_r)
-
-        # Invert r
-        bn_Ai = _ssl.BN_mod_inverse(bn_Ai, bn_r, self.bn_n, ctx)
-
-        if _ssl.BN_mod_exp(bn_A, bn_r, self.bn_e, self.bn_n, ctx) != 1:
-            logging.debug("Failed to get r^pk")
-            [_free_bn(x) for x in free]
-            _ssl.BN_CTX_end(ctx)
-            _ssl.BN_CTX_free(ctx)
-            return False
-
-        # Setup blinding
-        self.blinding = _ssl.BN_BLINDING_new(bn_A, bn_Ai, self.bn_n)
-
-        # Cleanup
-        [_free_bn(x) for x in free]
-        _ssl.BN_CTX_end(ctx)
-        _ssl.BN_CTX_free(ctx)
-
-        return True
-
-    def blind(self, msg):
+    def blind(self, msg, blind):
         """
         Blinds a msg.
-        setup_blinding() must have been called before with the blinding factor.
 
         Args:
             msg: A string - message to be blinded.
                len(msg) must equal self.size
+            blind: The blind that was used on the msg. instance of Blind
+
 
         Returns:
             A byte string of the blinded msg on success, None otherwise
         """
 
-        if self.blinding is None:
+        if(len(msg) != self.size or blind is None):
             return None
 
         ctx = _ssl.BN_CTX_new()
-        _ssl.BN_CTX_start(ctx)
+        f = _ssl.BN_bin2bn(msg, len(msg), _ssl.BN_new())
 
-        f = _ssl.BN_CTX_get(ctx)
-        _ssl.BN_bin2bn(ctypes.c_char_p(msg), len(msg), f)
-
-        if _ssl.BN_BLINDING_convert_ex(f, None, self.blinding, ctx) != 1:
+        if _ssl.BN_mod_mul(f, f, blind.bn_A, self.bn_n, ctx) != 1:
             logging.debug("Failed to blind msg")
             _ssl.BN_free(f)
-            _ssl.BN_CTX_end(ctx)
             _ssl.BN_CTX_free(ctx)
             return None
 
         blinded_msg = ctypes.create_string_buffer(self.size)
         BNToBin(f, blinded_msg, self.size)
 
-        return blinded_msg.raw
+        # Free
+        _ssl.BN_free(f)
+        _ssl.BN_CTX_free(ctx)
 
-    def unblind(self, msg):
+        return blinded_msg.raw[:self.size]
+
+    def unblind(self, msg, blind):
         """
         Unblinds a msg.
-        setup_blinding() must have been called before with the blinding factor.
 
         Args:
             msg: A string - a blinded message.
                len(msg) must equal self.size
+            blind: The blind that was used on the msg. instance of Blind
+
 
         Returns:
             A byte string of the unblinded msg on success, None otherwise
         """
-        if self.blinding is None:
+
+        if(len(msg) != self.size or blind is None):
             return None
 
         ctx = _ssl.BN_CTX_new()
-        _ssl.BN_CTX_start(ctx)
+        f = _ssl.BN_bin2bn(msg, len(msg), _ssl.BN_new())
 
-        f = _ssl.BN_CTX_get(ctx)
-        _ssl.BN_bin2bn(ctypes.c_char_p(msg), len(msg), f)
-
-        if _ssl.BN_BLINDING_invert_ex(f, None, self.blinding, ctx) != 1:
-            logging.debug("Failed to blind msg")
+        if _ssl.BN_mod_mul(f, f, blind.bn_Ai, self.bn_n, ctx) != 1:
+            logging.debug("Failed to unblind msg")
             _ssl.BN_free(f)
-            _ssl.BN_CTX_end(ctx)
             _ssl.BN_CTX_free(ctx)
             return None
 
@@ -365,51 +370,40 @@ class RSA:
 
         # Cleanup
         _ssl.BN_free(f)
-        _ssl.BN_CTX_end(ctx)
         _ssl.BN_CTX_free(ctx)
 
-        return unblinded_msg.raw
+        return unblinded_msg.raw[:self.size]
 
-    def revert_blind(self, r, msg):
+    def revert_blind(self, msg, blind):
         """
         Removes a blind r from the message.
 
         Args:
-            r: The blinding factor used on the msg.
             msg: A string - a blinded message.
                len(msg) must equal self.size
+            blind: The blind that was used on the msg. instance of Blind
 
         Returns:
             A byte string of the unblinded msg on success, None otherwise
         """
 
+        if(len(msg) != self.size or blind is None):
+            return None
+
         ctx = _ssl.BN_CTX_new()
-        _ssl.BN_CTX_start(ctx)
+        f = _ssl.BN_bin2bn(msg, len(msg), _ssl.BN_new())
 
-        bn_r = _ssl.BN_CTX_get(ctx)
-        bn_msg = _ssl.BN_CTX_get(ctx)
-        free = [bn_r, bn_msg]
-
-        _ssl.BN_bin2bn(ctypes.c_char_p(r), len(r), bn_r)
-        _ssl.BN_bin2bn(ctypes.c_char_p(msg), len(msg), bn_msg)
-
-        _ssl.BN_mod_inverse(bn_r, bn_r, self.bn_n, ctx)
-        _ssl.BN_mod_exp(bn_r, bn_r, self.bn_e, self.bn_n, ctx)
-
-        if _ssl.BN_mod_mul(bn_msg, bn_msg, bn_r, self.bn_n, ctx) \
-           != 1:
-            logging.debug("Failed to multiply")
-            [_ssl.BN_free(x) for x in free]
-            _ssl.BN_CTX_end(ctx)
+        if _ssl.BN_mod_mul(f, f, blind.bn_ri, self.bn_n, ctx) != 1:
+            logging.debug("Failed to unblind msg")
+            _ssl.BN_free(f)
             _ssl.BN_CTX_free(ctx)
             return None
 
         unblinded_msg = ctypes.create_string_buffer(self.size)
-        BNToBin(bn_msg, unblinded_msg, self.size)
+        BNToBin(f, unblinded_msg, self.size)
 
         # Cleanup
-        [_free_bn(x) for x in free]
-        _ssl.BN_CTX_end(ctx)
+        _ssl.BN_free(f)
         _ssl.BN_CTX_free(ctx)
 
-        return unblinded_msg.raw
+        return unblinded_msg.raw[:self.size]

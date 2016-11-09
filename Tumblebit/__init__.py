@@ -102,6 +102,10 @@ _ssl.BN_bin2bn.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_void_p]
 ## BN_CTX
 ##################
 
+_ssl.BN_new.errcheck = _check_res_void_p
+_ssl.BN_new.restype = ctypes.c_void_p
+_ssl.BN_new.argtypes = None
+
 _ssl.BN_CTX_new.errcheck = _check_res_void_p
 _ssl.BN_CTX_new.restype = ctypes.c_void_p
 _ssl.BN_CTX_new.argtypes = None
@@ -111,9 +115,7 @@ _ssl.BN_CTX_free.argtypes = [ctypes.c_void_p]
 
 _ssl.BN_CTX_start.restype = None
 _ssl.BN_CTX_start.argtypes = [ctypes.c_void_p]
-_ssl.BN_new.errcheck = _check_res_void_p
-_ssl.BN_new.restype = ctypes.c_void_p
-_ssl.BN_new.argtypes = None
+
 _ssl.BN_CTX_end.restype = None
 _ssl.BN_CTX_end.argtypes = [ctypes.c_void_p]
 

@@ -1,4 +1,5 @@
 import pytest
+import binascii
 from tumblebit.rsa import RSA
 from tumblebit import get_random
 
@@ -55,20 +56,28 @@ class TestRSA:
     def test_blinding(self, private_rsa, public_rsa):
         msg = b"01" * (256 // 2)
         r = get_random(2048)
-        assert public_rsa.setup_blinding(r) is True
+        blind = public_rsa.setup_blinding(r)
+        assert blind is not None
 
-        blinded_msg = public_rsa.blind(msg)
+        blinded_msg = public_rsa.blind(msg, blind)
+        blinded_msg_2 = public_rsa.blind(msg, blind)
+
         assert blinded_msg is not None
+        assert blinded_msg == blinded_msg_2
 
         sig = private_rsa.sign(blinded_msg)
+        sig_2 = private_rsa.sign(blinded_msg_2)
         assert sig is not None
+        assert sig_2 is not None
 
-        unblinded_sig = public_rsa.unblind(sig)
+        unblinded_sig = public_rsa.unblind(sig, blind)
+        unblinded_sig_2 = public_rsa.unblind(sig_2, blind)
         assert unblinded_sig is not None
-
         assert public_rsa.verify(msg, unblinded_sig)
 
         # Strip blinding factor from message
-        unblinded_msg = public_rsa.revert_blind(r, blinded_msg)
+        unblinded_msg = public_rsa.revert_blind(blinded_msg, blind)
+        unblinded_msg_2 = public_rsa.revert_blind(blinded_msg_2, blind)
         assert unblinded_msg is not None
         assert unblinded_msg == msg
+        assert unblinded_msg_2 == msg
