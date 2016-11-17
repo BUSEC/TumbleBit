@@ -7,25 +7,35 @@ from tumblebit import (_ssl, _libc, _free_bn, RSA_F4, RSA_NO_PADDING,
 
 
 class Blind:
+    """
+    A class that stores a blind value in various forms.
+
+    Attributes:
+        r: The blind value
+        bn_r:  A bn instance -- r
+        bn_Ai: A bn instance -- (r^-1)
+        bn_A:  A bn instance -- r^pk
+        bn_ri: A bn instance -- (r^-1)^pk
+    """
     def __init__(self, r, e, mod):
         assert r is not None
         assert e is not None
         assert mod is not None
 
-        self.r = r
+        ctx = _ssl.BN_CTX_new()
         self._free = []
 
-        ctx = _ssl.BN_CTX_new()
+        self.r = r
         self.bn_r = _ssl.BN_bin2bn(r, len(r), _ssl.BN_new())  # r
-        self.bn_Ai = _ssl.BN_mod_inverse(None, self.bn_r, mod, ctx)  # ri
+        self.bn_Ai = _ssl.BN_mod_inverse(None, self.bn_r, mod, ctx)  # r^-1
 
-        self.bn_A = _ssl.BN_new()
+        self.bn_A = _ssl.BN_new()  # r^pk
         if _ssl.BN_mod_exp(self.bn_A, self.bn_r, e, mod, ctx) != 1:
             logging.debug("Failed to get r^pk")
 
-        self.bn_ri = _ssl.BN_new()
+        self.bn_ri = _ssl.BN_new()  # (r^-1)^pk
         if _ssl.BN_mod_exp(self.bn_ri, self.bn_Ai, e, mod, ctx) != 1:
-            logging.debug("Failed to get r^pk")
+            logging.debug("Failed to get (r^-1)^pk")
         _ssl.BN_CTX_free(ctx)
 
         self._free = [self.bn_r, self.bn_ri, self.bn_A, self.bn_Ai]
@@ -250,7 +260,7 @@ class RSA:
             msg: A string - message to be signed. len(msg) must equal self.size
 
         Returns:
-            True on success, False otherwise
+            The signature on success, None otherwise
         """
 
         if not self.is_private or len(msg) != self.size:
@@ -276,15 +286,58 @@ class RSA:
             True on success, False otherwise
         """
         if len(msg) != len(sig):
-            return None
+            return False
 
         decrypted = ctypes.create_string_buffer(self.size)
 
         if _ssl.RSA_public_decrypt(len(sig), sig, decrypted, self.key,
                                    RSA_NO_PADDING) != len(msg):
-            return None
+            return False
 
         return decrypted[:self.size] == msg
+
+    def encrypt(self, msg):
+        """
+        Encrypts msg using rsa public key.
+
+        Args:
+            msg: A string - message to be signed. len(msg) must equal self.size
+
+        Returns:
+            The encrypted msg on success, None otherwise
+        """
+
+        if len(msg) != self.size:
+            return None
+
+        sig = ctypes.create_string_buffer(self.size)
+
+        if _ssl.RSA_public_encrypt(len(msg), ctypes.c_char_p(msg), sig,
+                                   self.key, RSA_NO_PADDING) == -1:
+            return None
+
+        return sig.raw[:self.size]
+
+    def decrypt(self, msg):
+        """
+        Decrypts a msg using the private key
+
+        Args:
+            msg: A string - Encrypted message. len(msg) must equal self.size
+
+        Returns:
+            True on success, False otherwise
+        """
+        if not self.is_private or len(msg) != self.size:
+            return None
+
+        decrypted = ctypes.create_string_buffer(self.size)
+
+        if _ssl.RSA_private_decrypt(len(msg), msg, decrypted, self.key,
+                                    RSA_NO_PADDING) == -1:
+            return None
+
+        return decrypted[:self.size]
 
     def setup_blinding(self, r):
         """
@@ -330,14 +383,12 @@ class RSA:
             _ssl.BN_CTX_free(ctx)
             return None
 
-        blinded_msg = ctypes.create_string_buffer(self.size)
-        BNToBin(f, blinded_msg, self.size)
+        blinded_msg = BNToBin(f, self.size)
 
         # Free
         _ssl.BN_free(f)
         _ssl.BN_CTX_free(ctx)
-
-        return blinded_msg.raw[:self.size]
+        return blinded_msg
 
     def unblind(self, msg, blind):
         """
@@ -365,14 +416,13 @@ class RSA:
             _ssl.BN_CTX_free(ctx)
             return None
 
-        unblinded_msg = ctypes.create_string_buffer(self.size)
-        BNToBin(f, unblinded_msg, self.size)
+        unblinded_msg = BNToBin(f, self.size)
 
         # Cleanup
         _ssl.BN_free(f)
         _ssl.BN_CTX_free(ctx)
 
-        return unblinded_msg.raw[:self.size]
+        return unblinded_msg
 
     def revert_blind(self, msg, blind):
         """
@@ -399,11 +449,10 @@ class RSA:
             _ssl.BN_CTX_free(ctx)
             return None
 
-        unblinded_msg = ctypes.create_string_buffer(self.size)
-        BNToBin(f, unblinded_msg, self.size)
+        unblinded_msg = BNToBin(f, self.size)
 
         # Cleanup
         _ssl.BN_free(f)
         _ssl.BN_CTX_free(ctx)
 
-        return unblinded_msg.raw[:self.size]
+        return unblinded_msg

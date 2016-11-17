@@ -26,13 +26,12 @@ _libc.fclose.argtypes = [ctypes.c_void_p]
 # TODO: Find a way to automate this
 path = "/usr/local/opt/libressl/lib/libssl.dylib"
 _ssl = ctypes.cdll.LoadLibrary(path)
+_ssl.SSL_load_error_strings()
 
 
 class LibreSSLException(OSError):
     pass
 
-
-_ssl.SSL_load_error_strings()
 
 # Taken from python-bitcoinlib key.py
 # Thx to Sam Devlin for the ctypes magic 64-bit fix
@@ -192,6 +191,16 @@ _ssl.RSA_private_encrypt.argtypes = [ctypes.c_int, ctypes.c_char_p,
                                      ctypes.c_void_p, ctypes.c_void_p,
                                      ctypes.c_int]
 
+_ssl.RSA_public_encrypt.restype = ctypes.c_int
+_ssl.RSA_public_encrypt.argtypes = [ctypes.c_int, ctypes.c_char_p,
+                                    ctypes.c_void_p, ctypes.c_void_p,
+                                    ctypes.c_int]
+
+_ssl.RSA_private_decrypt.restype = ctypes.c_int
+_ssl.RSA_private_decrypt.argtypes = [ctypes.c_int, ctypes.c_void_p,
+                                     ctypes.c_void_p, ctypes.c_void_p,
+                                     ctypes.c_int]
+
 _ssl.RSA_public_decrypt.restype = ctypes.c_int
 _ssl.RSA_public_decrypt.argtypes = [ctypes.c_int, ctypes.c_void_p,
                                     ctypes.c_void_p, ctypes.c_void_p,
@@ -249,35 +258,13 @@ _ssl.ChaCha_set_iv.restype = None
 _ssl.ChaCha_set_iv.argtypes = [ctypes.c_void_p, ctypes.c_void_p,
                                ctypes.c_void_p]
 
-_ssl.ChaCha.restype =  None
+_ssl.ChaCha.restype = None
 _ssl.ChaCha.argtypes = [ctypes.c_void_p, ctypes.c_void_p,
                         ctypes.c_void_p, ctypes.c_uint]
 
 ###########################################################################
 ## Helpers
 ###########################################################################
-
-
-def chacha(key, iv, msg):
-    """ Encryptes msg using chacha
-
-    All arguments should be byte strings.
-
-    Returns:
-        Result as a byte string or None in failure.
-    """
-    if len(iv) != 8 or len(key) not in [16, 32] or msg is None:
-        return None
-
-    # Setup
-    ctx = ctypes.byref(ChaCha_ctx())
-    _ssl.ChaCha_set_key(ctx, key, len(key))
-    _ssl.ChaCha_set_iv(ctx, iv, None)
-
-    out = ctypes.create_string_buffer(len(msg))
-    _ssl.ChaCha(ctx, ctypes.pointer(out), msg, len(msg))
-
-    return out[:len(msg)]
 
 
 def _free_bn(x):
@@ -291,9 +278,9 @@ def BN_num_bytes(bn):
     return (_ssl.BN_num_bits(bn) + 7) // 8
 
 
-def BNToBin(bn, data, data_len):
+def BNToBin(bn, size):
     """
-    Converts a bn instance to a byte string of length data_len.
+    Converts a bn instance to a byte string of length "size".
 
     We make the assumption that all bin representations of BIGNUMs will be the
     same length. In semi-rare cases the bignum use than data_len bytes.  Such
@@ -304,22 +291,22 @@ def BNToBin(bn, data, data_len):
 
     Args:
         bn: A bn(BIGNUM) instance
-        data: A ctypes string buffer of data_len
-        data_len: An int that represnts the length of the ctypes string buffer
+        size: An int that represnts the requested size of the output string.
 
     Returns:
-        A byte string containing the data from bn of size data_len
+        A byte string containing the data from bn of length "size"
 
     """
-    if bn is None or data is None:
+    if bn is None:
         return None
 
-    offset = data_len - BN_num_bytes(bn)
+    data = ctypes.create_string_buffer(size)
+    offset = size - BN_num_bytes(bn)
     ret = _ssl.BN_bn2bin(bn, ctypes.byref(data, offset))
     for i in range(offset):
         data[i] = 0
 
-    return data[:data_len]
+    return data.raw[:size]
 
 
 def get_random(bits, mod=None):
@@ -339,11 +326,11 @@ def get_random(bits, mod=None):
     ret = _ssl.BN_CTX_get(ctx)
 
     if mod:
-        if _ssl.BN_rand_range(r, n) == 0:
+        if _ssl.BN_rand_range(r, mod) == 0:
             logging.debug("get_random: failed to generate random number")
             return None
 
-        while _ssl.BN_gcd(ret, r, n, ctx) != 1:
+        while _ssl.BN_gcd(ret, r, mod, ctx) != 1:
             logging.debug("R is not a relative prime")
             if _ssl.BN_rand_range(r, n) == 0:
                 logging.debug("get_random: failed to generate random number")
@@ -362,4 +349,4 @@ def get_random(bits, mod=None):
     _ssl.BN_CTX_end(ctx)
     _ssl.BN_CTX_free(ctx)
 
-    return rand[:r_len]
+    return rand.raw[:r_len]
