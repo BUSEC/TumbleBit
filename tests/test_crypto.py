@@ -3,8 +3,12 @@ import pytest
 from tumblebit import get_random
 from tumblebit.rsa import RSA
 from tumblebit.crypto import chacha
-
 from tumblebit.puzzle_solver import PuzzleSolverClient, PuzzleSolverServer
+
+@pytest.fixture()
+def keypath(tmpdir_factory):
+    path = tmpdir_factory.mktemp('test_crypto', numbered=False)
+    return str(path)
 
 
 def test_chacha():
@@ -22,12 +26,6 @@ def test_chacha():
     iv2 = get_random(64)
     encrypted = chacha(key2, iv2, msg)
     assert chacha(key2, iv2, encrypted) == msg
-
-
-@pytest.fixture()
-def keypath(tmpdir_factory):
-    path = tmpdir_factory.mktemp('keys', numbered=False)
-    return str(path)
 
 
 def test_puzzle_solver(keypath):

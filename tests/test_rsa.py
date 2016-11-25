@@ -4,9 +4,9 @@ from tumblebit.rsa import RSA
 from tumblebit import get_random
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def key_path(tmpdir_factory):
-    path = tmpdir_factory.mktemp('keys', numbered=False)
+    path = tmpdir_factory.mktemp('test_rsa', numbered=False)
     return str(path)
 
 
