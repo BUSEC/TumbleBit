@@ -4,10 +4,6 @@ Proof of Concept implementation of TumbleBit as an untrusted [classic tumbler](h
 
 **Description:** TumbleBit is a new anonymous payments protocol that is fully compatible with today’s Bitcoin protocol. TumbleBit allows parties to make payments through an untrusted Tumbler. No-one, not even the Tumbler, can tell which payer paid which payee during a TumbleBit epoch. TumbleBit consists of two interleaved fair-exchange protocols that prevent theft of bitcoins by cheating users or a malicious Tumbler. TumbleBit combines fast cryptographic computations (performed off the blockchain) with standard bitcoin scripting functionalities (on the blockchain) that realize smart contracts. TumbleBit was used to mix [800 input addresses](https://blockchain.info/tx/fd51bd844202ef050f1fbe0563e3babd2df3c3694b61af39ac811ad14f52b233) to [800 output addresses](https://blockchain.info/tx/8520da7116a1e634baf415280fdac45f96e680270ea06810512531a783f0c9f6) on Bitcoin's blockchain.
 
-We will be posting a development roadmap shortly.
-
-
-
 ----
 ### Warning
 This code is very early in its development (proof-of-concept phase) and is currently not ready for production.
@@ -68,7 +64,7 @@ For ubuntu, you can install the dependencies by running:
 ```
 ./ubuntu_setup.sh
 ```
-### Building
+### Building POC
 
 Default build setting is to have the clients and
 the servers on the same machine.
@@ -76,6 +72,15 @@ the servers on the same machine.
 If you want to run the servers on different machines,
 change TUMBLER_SERVER_SOCKET and SIGNER_SERVER_SOCKET in
 include/constants.h to point to the ip of your machine.
+
+
+### Running Tests for Python code
+```
+cd TumbleBit/ 
+sudo pip install -e .
+pytest tests/
+```
+
 
 ##### Note
 Should be in the POC_code directory
