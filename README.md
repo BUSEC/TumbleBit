@@ -75,10 +75,12 @@ include/constants.h to point to the ip of your machine.
 
 
 ### Running Tests for Python code
+Our python code only supports python3.
+
 ```
 cd TumbleBit/ 
 sudo pip install -e .
-pytest tests/
+python3 -m pytest tests/
 ```
 
 
