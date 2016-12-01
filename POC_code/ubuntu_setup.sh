@@ -6,6 +6,7 @@
 sudo apt-get update
 sudo apt-get install libtool pkg-config build-essential autoconf automake
 sudo apt-get install libboost-all-dev
+sudo apt-get install libzmq3-dev
 sudo apt-get install python-pip
 
 # Install ZMQ
@@ -35,3 +36,5 @@ rm libressl-2.3.4.tar.gz
 
 # Install python dependencies
 pip install -r requirements.txt
+
+sudo apt-get install libzmq-dev
