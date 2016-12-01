@@ -21,7 +21,7 @@ def test_chacha():
     iv1 = "a" * 8
     ciphertext1 = chacha(key1, iv1, msg1)
 
-    assert hexlify(ciphertext1) == "6fd00a0eb13188df7a68f11753"
+    assert hexlify(ciphertext1) == b"f4d00b7237791f237a2ddebd20"
     assert chacha(key1, iv1, ciphertext1) == msg1
 
     # Case 2: 256 bit key
@@ -30,11 +30,12 @@ def test_chacha():
     iv2 = "b" * 8
     ciphertext2 = chacha(key2, iv2, msg2)
 
-    assert hexlify(ciphertext2) == "cfb54bd3d758494645061442b5"
+    assert hexlify(ciphertext2) == b"5b7e78078d16c5efb7c46aa2a3"
     assert chacha(key2, iv2, ciphertext2) == msg2
 
 def test_puzzle_solver(keypath):
     server_key = RSA(keypath, "test")
+
     assert server_key.generate(2048) is True
     assert server_key.save_public_key() is True
 
