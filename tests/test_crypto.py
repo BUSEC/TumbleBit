@@ -1,5 +1,7 @@
 import pytest
 
+from binascii import hexlify, unhexlify
+
 from tumblebit import get_random
 from tumblebit.rsa import RSA
 from tumblebit.crypto import chacha
@@ -12,21 +14,24 @@ def keypath(tmpdir_factory):
 
 
 def test_chacha():
-    msg = "123" * 10
-    msg = msg.encode("utf-8")
 
     # Case 1: 128 bit key
+    msg1 = unhexlify("12345678901234567890123456")
     key1 = "x" * 16
     iv1 = "a" * 8
-    encrypted = chacha(key1, iv1, msg)
-    assert chacha(key1, iv1, encrypted) == msg
+    ciphertext1 = chacha(key1, iv1, msg1)
+
+    assert hexlify(ciphertext1) == "6fd00a0eb13188df7a68f11753"
+    assert chacha(key1, iv1, ciphertext1) == msg1
 
     # Case 2: 256 bit key
-    key2 = get_random(256)
-    iv2 = get_random(64)
-    encrypted = chacha(key2, iv2, msg)
-    assert chacha(key2, iv2, encrypted) == msg
+    msg2 = unhexlify("12345678901234567890123456")
+    key2 = "z" * 32
+    iv2 = "b" * 8
+    ciphertext2 = chacha(key2, iv2, msg2)
 
+    assert hexlify(ciphertext2) == "cfb54bd3d758494645061442b5"
+    assert chacha(key2, iv2, ciphertext2) == msg2
 
 def test_puzzle_solver(keypath):
     server_key = RSA(keypath, "test")
