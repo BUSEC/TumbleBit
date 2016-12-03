@@ -1,8 +1,8 @@
 from tumblebit.rsa import RSA
 from tumblebit.crypto import chacha, ripemd160
-from tumblebit import get_random, BNToBin
+from tumblebit import BNToBin
 from random import shuffle
-
+import tumblebit
 
 class Puzzle_Solver:
     def __init__(self, m, n):
@@ -11,7 +11,7 @@ class Puzzle_Solver:
 
     @staticmethod
     def encrypt(key, msg):
-        iv = get_random(64)  # 8 byte iv
+        iv = Puzzle_Solver.compute_rand(64)  # 8 byte iv
         cipher = chacha(key, iv, msg)
         return iv + cipher
 
@@ -20,6 +20,10 @@ class Puzzle_Solver:
         iv = cipher[:8]
         msg = chacha(key, iv, cipher[8:])
         return msg
+
+    @staticmethod
+    def compute_rand(bits):
+        return tumblebit.get_random(bits)
 
 
 #######################################################
@@ -44,7 +48,7 @@ class PuzzleSolverClient(Puzzle_Solver):
         reals = []
         self.real_blinds = []
         for i in range(self.m):
-            r = get_random(bits)
+            r = self.compute_rand(bits)
             blind = self.key.setup_blinding(r)
             blinded_val = self.key.blind(self.puzzle, blind)
             if blinded_val is None:
@@ -56,7 +60,7 @@ class PuzzleSolverClient(Puzzle_Solver):
         fakes = []
         self.fake_blinds = []
         for i in range(self.n):
-            r = get_random(bits)
+            r = self.compute_rand(bits)
             blind = self.key.setup_blinding(r)
             if blind is None:
                 return None
@@ -145,7 +149,7 @@ class PuzzleSolverServer(Puzzle_Solver):
                     return None
 
                 # Encrypt
-                key = get_random(128)
+                key = self.compute_rand(128)
                 cipher = self.encrypt(key, sig)
                 ciphers.append(cipher)
                 self.keys.append(key)
