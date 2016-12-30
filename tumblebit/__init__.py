@@ -2,6 +2,7 @@ import ctypes
 import ctypes.util
 import logging
 from platform import system
+import config
 
 ###########################################################################
 ## CTypes -- Function Definitions
@@ -24,12 +25,18 @@ _libc.fclose.argtypes = [ctypes.c_void_p]
 ########################################################
 
 # Change path to where libressl library is
-# TODO: Add an option to specify the path in some sort of
-#       config file.
-if(system() == "Darwin"):
-    path = "/usr/local/opt/libressl/lib/libssl.dylib"
+try:
+    config.LIBRESSL_PATH
+except NameError:
+    # doesn't print err, sets default. when the path is loaded if location
+    # does not exist will error. Consider warning here to make easy to
+    # find config
+    if(system() == "Darwin"):
+        path = "/usr/local/opt/libressl/lib/libssl.dylib"
+    else:
+        path = "/usr/local/lib/libssl.so"
 else:
-    path = "/usr/local/lib/libssl.so"
+    path = config.LIBRESSL_PATH
 
 _ssl = ctypes.cdll.LoadLibrary(path)
 _ssl.SSL_load_error_strings()
