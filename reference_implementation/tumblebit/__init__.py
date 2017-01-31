@@ -1,3 +1,5 @@
+import os
+import sys
 import logging
 import ctypes
 import ctypes.util
@@ -28,10 +30,18 @@ _libc.fclose.argtypes = [ctypes.c_void_p]
 # TODO: Add an option to specify the path in some sort of
 #       config file.
 if(platform.system() == "Darwin"):
-    path = "/usr/local/opt/libressl/lib/libssl.dylib" # if by homebrew
-    #path = "/usr/local/lib/libssl.dylib" # if installed by source
+
+    # Was libressl installed using homebrew?
+    path = "/usr/local/opt/libressl/lib/libssl.dylib"
+    if not os.path.isfile(path):
+        # Maybe built from source
+        path = "/usr/local/lib/libssl.dylib"
+
 else:
     path = "/usr/local/lib/libssl.so"
+
+if not os.path.isfile(path):
+    sys.exit("Error: didn't find libressl in your system.")
 
 _ssl = ctypes.cdll.LoadLibrary(path)
 _ssl.SSL_load_error_strings()
