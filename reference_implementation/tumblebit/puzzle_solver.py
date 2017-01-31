@@ -1,28 +1,88 @@
+"""
+tumblebit.puzzle_solver
+~~~~~~~~~~~~~~~~~~~~~~~
+
+This module is an implementation of the puzzle solver protocol described in the
+tumblebit paper.
+"""
+
 import random
 
 from tumblebit.rsa import RSA
 from tumblebit.crypto import chacha, ripemd160
 from tumblebit import BNToBin, get_random
 
-class Puzzle_Solver:
+class Puzzle_Solver(object):
+    """
+    This is a base class that defines the parameters and common methods for
+    the puzzle solver protocol.
+
+    Attributes:
+        m (int): The number of real values
+        n (int): The number of fake values
+
+    Note:
+        `m` and `n` represent security parameters that define the probability
+        that a malicious tumbler server cheats the user. The tumbler can
+        cheat with probability 1/(`n`+`m` choose `n`). Which with the default
+        values where `n` = 285, and `m` = 15, would be 2^(-80) which is very low.
+
+    Warning:
+        The value of `m` is limited to 21. This is because `m` ripemd160 hashes
+        must be stored in a bitcoin transaction which is limited to 520 bytes.
+    """
+
     def __init__(self, m, n):
         self.m = m  # Number of reals
         self.n = n  # Number of fakes
 
     @staticmethod
     def encrypt(key, msg):
+        """Encrypts the msg using chacha20
+
+        Args:
+            key (str): A 16 byte key that will be used for encryption.
+            msg (str): A message to be encrypted
+
+        Returns:
+            str: A string where the first 8 bytes represent the iv
+                 used in the encryption process then followed by
+                 the encrypted msg.
+
+        Raises:
+            ValueError: If `key` is not 16 bytes
+        """
+        if len(key) != 16:
+            raise ValueError('key must be 16 bytes')
+
         iv = Puzzle_Solver.compute_rand(64)  # 8 byte iv
         cipher = chacha(key, iv, msg)
         return iv + cipher
 
     @staticmethod
     def decrypt(key, cipher):
+        """Decrypts the msg using chacha20
+
+        Args:
+            key (str): A 16 byte key that will be used for decryption.
+            cipher (str): A message to be decrypted
+
+        Returns:
+            str: The decrypted msg
+
+        Raises:
+            ValueError: If `key` is not 16 bytes
+        """
+        if len(key) != 16:
+            raise ValueError('key must be 16 bytes')
+        
         iv = cipher[:8]
         msg = chacha(key, iv, cipher[8:])
         return msg
 
     @staticmethod
     def compute_rand(bits):
+        """ Returns a random string of length (bits/8). """
         return get_random(bits)
 
 
