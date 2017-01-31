@@ -1,8 +1,8 @@
+import random
+
 from tumblebit.rsa import RSA
 from tumblebit.crypto import chacha, ripemd160
-from tumblebit import BNToBin
-from random import shuffle
-import tumblebit
+from tumblebit import BNToBin, get_random
 
 class Puzzle_Solver:
     def __init__(self, m, n):
@@ -23,7 +23,7 @@ class Puzzle_Solver:
 
     @staticmethod
     def compute_rand(bits):
-        return tumblebit.get_random(bits)
+        return get_random(bits)
 
 
 #######################################################
@@ -37,8 +37,8 @@ class PuzzleSolverClient(Puzzle_Solver):
             raise ValueError("rsa_key must be provided.")
         if not isinstance(rsa_key, RSA):
             raise ValueError("rsa_key must be instance of RSA.")
-        self.key = rsa_key
 
+        self.key = rsa_key
         self.puzzle = puzzle
 
     def prepare_puzzle_set(self, puzzle):
@@ -70,7 +70,7 @@ class PuzzleSolverClient(Puzzle_Solver):
         # Create Shuffled puzzle set
         self.puzzle_set = fakes[:]
         self.puzzle_set += reals
-        shuffle(self.puzzle_set)
+        random.shuffle(self.puzzle_set)
 
         # Record indices
         self.R = [self.puzzle_set.index(x) for x in reals]
