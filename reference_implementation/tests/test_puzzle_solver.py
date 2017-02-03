@@ -5,14 +5,14 @@ from binascii import hexlify, unhexlify
 
 from tumblebit.rsa import RSA
 from tumblebit.crypto import chacha
-from tumblebit.puzzle_solver import PuzzleSolverClient, PuzzleSolverServer, Puzzle_Solver
+from tumblebit.puzzle_solver import PuzzleSolverClient, PuzzleSolverServer, PuzzleSolver
 import tumblebit
 
 
 def predictableRandomness(bits):
     return random.getrandbits(bits).to_bytes(int(bits/8), byteorder='big')
 
-Puzzle_Solver.compute_rand = staticmethod(predictableRandomness)
+PuzzleSolver.compute_rand = staticmethod(predictableRandomness)
 
 
 

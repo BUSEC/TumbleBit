@@ -70,7 +70,7 @@ class PuzzleSolver(object):
             print("Length of key is %d" % len(key))
             raise ValueError('key must be 16 bytes')
 
-        iv = Puzzle_Solver.compute_rand(64)  # 8 byte iv
+        iv = PuzzleSolver.compute_rand(64)  # 8 byte iv
         cipher = chacha(key, iv, msg)
         return iv + cipher
 
