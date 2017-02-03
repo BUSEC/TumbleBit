@@ -12,19 +12,24 @@ from tumblebit.rsa import RSA
 from tumblebit.crypto import chacha, ripemd160
 from tumblebit import BNToBin, get_random
 
-class Puzzle_Solver(object):
+class PuzzleSolver(object):
     """
     This is a base class that defines the parameters and common methods for
     the puzzle solver protocol.
 
     Attributes:
+        rsa_key (:obj:`RSA`): An RSA key
         m (int): The number of real values
         n (int): The number of fake values
+        set_len (int): Sum of `m` + `n`
+
+    Raises:
+        ValueError: if rsa_key is None or not an instance of RSA
 
     Note:
         `m` and `n` represent security parameters that define the probability
         that a malicious tumbler server cheats the user. The tumbler can
-        cheat with probability 1/(`n`+`m` choose `n`). Which with the default
+        cheat with probability 1 / ( ( `n` + `m` ) choose `n`). Which with the default
         values where `n` = 285, and `m` = 15, would be 2^(-80) which is very low.
 
     Warning:
@@ -32,9 +37,18 @@ class Puzzle_Solver(object):
         must be stored in a bitcoin transaction which is limited to 520 bytes.
     """
 
-    def __init__(self, m, n):
+    def __init__(self, rsa_key, m, n):
+
+        if not rsa_key:
+            raise ValueError("rsa_key must be provided.")
+        if not isinstance(rsa_key, RSA):
+            raise ValueError("rsa_key must be instance of RSA.")
+
+        self.key = rsa_key
+
         self.m = m  # Number of reals
         self.n = n  # Number of fakes
+        self.set_len = m + n
 
     @staticmethod
     def encrypt(key, msg):
@@ -53,6 +67,7 @@ class Puzzle_Solver(object):
             ValueError: If `key` is not 16 bytes
         """
         if len(key) != 16:
+            print("Length of key is %d" % len(key))
             raise ValueError('key must be 16 bytes')
 
         iv = Puzzle_Solver.compute_rand(64)  # 8 byte iv
@@ -75,7 +90,7 @@ class Puzzle_Solver(object):
         """
         if len(key) != 16:
             raise ValueError('key must be 16 bytes')
-        
+
         iv = cipher[:8]
         msg = chacha(key, iv, cipher[8:])
         return msg
@@ -85,23 +100,56 @@ class Puzzle_Solver(object):
         """ Returns a random string of length (bits/8). """
         return get_random(bits)
 
+    def get_rand_mod(self, bits):
+        """
+        Returns a random string of length (bits/8)
+        with a value less the mod in the rsa key.
+        """
+        return get_random(bits, mod=self.key.bn_n)
+
+
 
 #######################################################
 ##### Client (Alice)
 #######################################################
-class PuzzleSolverClient(Puzzle_Solver):
+class PuzzleSolverClient(PuzzleSolver):
+    """
+    This class defines the client portion of the puzzle solver protocol.
+
+    Attributes:
+        rsa_key (:obj:`RSA`): The tumbler's public RSA key
+        puzzle (str): The rsa puzzle to be solved by the tumbler
+        m (:obj:`int`, optional): The number of real values
+        n (:obj:`int`, optional): The number of fake values
+
+        R (list): The indices of the real puzzle values in the puzzle set
+        F (list): The indices of the fake puzzle values in the puzzle set
+
+        puzzle_set (list): A shuffled list of real/fake puzzles
+        real_blinds (list): The random values used to blind the puzzle
+        fake_blinds (list): The fake values that were blinded.
+
+    Raises:
+        ValueError: If length of `puzzle` is not equal to rsa key size
+    """
+
     def __init__(self, rsa_key, puzzle, m=15, n=285):
-        super(PuzzleSolverClient, self).__init__(m, n)
+        super(PuzzleSolverClient, self).__init__(rsa_key, m, n)
 
-        if not rsa_key:
-            raise ValueError("rsa_key must be provided.")
-        if not isinstance(rsa_key, RSA):
-            raise ValueError("rsa_key must be instance of RSA.")
+        if len(puzzle) != rsa_key.size:
+            raise ValueError("len(puzzle) must be the same as rsa key size.")
 
-        self.key = rsa_key
         self.puzzle = puzzle
 
-    def prepare_puzzle_set(self, puzzle):
+    def prepare_puzzle_set(self):
+        """ Prepares a puzzle set of length `n` + `m`
+
+        Prepares a shuffled puzzle set made out of `m` real puzzle values and
+        `n` fake values.
+
+        Returns:
+            None if blinding fails, else the shuffled puzzle set.
+        """
         bits = self.key.size * 8
 
         # Prepare reals
@@ -120,11 +168,11 @@ class PuzzleSolverClient(Puzzle_Solver):
         fakes = []
         self.fake_blinds = []
         for i in range(self.n):
-            r = self.compute_rand(bits)
-            blind = self.key.setup_blinding(r)
-            if blind is None:
+            r = self.get_rand_mod(bits)
+            r_pk = self.key.encrypt(r)
+            if r_pk is None:
                 return None
-            fakes += [BNToBin(blind.bn_A, self.key.size)]
+            fakes += [r_pk]
             self.fake_blinds += [r]
 
         # Create Shuffled puzzle set
@@ -139,24 +187,57 @@ class PuzzleSolverClient(Puzzle_Solver):
         return self.puzzle_set
 
     def verify_fake_solutions(self, ciphers, commitments, fake_keys):
+        """
+        Returns true if `fake_keys` correctly decrypt to the fake puzzle values.
+
+        Arguments:
+            ciphers (list): The encrypted solutions to the puzzles.
+            commitments(list): The commitment to the keys that decrypt the
+                               puzzle solutions in `ciphers`
+            fake_keys(list): The keys that should decrypt the fake puzzles.
+
+        Note:
+            length of `ciphers` and `commitments` should be  `n` + `m`. The
+            length of `fake_keys` should be `n`
+
+        """
+        if len(ciphers) != self.set_len or len(commitments) != self.set_len:
+            return False
         if len(fake_keys) != self.n:
             return False
 
         j = 0
         for i in self.F:
+
+            # Check if key is the same value in commitment
             key = fake_keys[j]
             if commitments[i] != ripemd160(key):
                 return False
 
-            decrypted_sig = self.decrypt(key, ciphers[j])
-            if self.key.encrypt(decrypted_sig) == self.fake_blinds[j]:
+            # Check if solution is eqal to the fake value
+            decrypted_sig = self.decrypt(key, ciphers[i])
+            if decrypted_sig != self.fake_blinds[j]:
                 return False
+
             j += 1
 
         return True
 
     def extract_solution(self, ciphers, real_keys):
-        if len(real_keys) != self.m:
+        """ Returns a solution to the puzzle.
+
+        Arguements:
+            ciphers (list): The encrypted solutions to the puzzles.
+            real_keys(list): The keys that should decrypt the real puzzles.
+
+        Returns:
+            The puzzle solution, or None
+
+        Note:
+            Length of `ciphers` should be  `n` + `m`.
+            Length of `real_keys` should be `m`.
+        """
+        if len(ciphers) != self.set_len or len(real_keys) != self.m:
             return None
 
         for i in range(self.m):
@@ -178,49 +259,83 @@ class PuzzleSolverClient(Puzzle_Solver):
 #######################################################
 ##### Server (Tumbler)
 #######################################################
-class PuzzleSolverServer(Puzzle_Solver):
-    def __init__(self, rsa_key, m=15, n=285):
-        super(PuzzleSolverServer, self).__init__(m, n)
+class PuzzleSolverServer(PuzzleSolver):
+    """
+    This class defines the server portion of the puzzle solver protocol.
 
-        if not rsa_key:
-            raise ValueError("rsa_key must be provided.")
-        if not isinstance(rsa_key, RSA):
-            raise ValueError("rsa_key must be instance of RSA.")
+    Attributes:
+        rsa_key (:obj:`RSA`): The tumbler's public RSA key
+        m (:obj:`int`, optional): The number of real values
+        n (:obj:`int`, optional): The number of fake values
+
+        puzzles (list): The puzzles to solve
+        keys (list): The keys used to encrypt the solutions
+
+
+    Raises:
+        ValueError: If the rsa key is not a private key
+    """
+    def __init__(self, rsa_key, m=15, n=285):
+        super(PuzzleSolverServer, self).__init__(rsa_key, m, n)
+
         if not rsa_key.is_private:
             raise ValueError("rsa_key for the server must be a private key.")
-        self.key = rsa_key
 
     def solve_puzzles(self, puzzles):
-            self.puzzles = puzzles
+        """
+        Solves the puzzles then encrypts them and commits to the encryption key.
 
-            length = self.m + self.n
-            if len(puzzles) != length:
+        Arguments:
+            puzzles (list): A list of puzzles to solve
+
+        Returns:
+            A tuple containing a list of the encrypted solutions and a list of
+            key commitments. Returns None if puzzles is not of the expected
+            length or if there was a problem in solving(signing) the puzzles.
+        """
+        self.puzzles = puzzles
+
+        if len(puzzles) != self.set_len:
+            return None
+
+        ciphers = []
+        commits = []
+        self.keys = []
+        for i in range(self.set_len):
+            msg = puzzles[i]
+
+            # Sign
+            sig = self.key.sign(msg)
+            if sig is None:
                 return None
 
-            ciphers = []
-            commits = []
-            self.keys = []
-            for i in range(length):
-                msg = puzzles[i]
+            # Encrypt
+            key = self.compute_rand(128)
+            cipher = self.encrypt(key, sig)
+            ciphers.append(cipher)
+            self.keys.append(key)
 
-                # Sign
-                sig = self.key.sign(msg)
-                if sig is None:
-                    return None
+            # Commit
+            commitment = ripemd160(key)
+            commits.append(commitment)
 
-                # Encrypt
-                key = self.compute_rand(128)
-                cipher = self.encrypt(key, sig)
-                ciphers.append(cipher)
-                self.keys.append(key)
-
-                # Commit
-                commitment = ripemd160(key)
-                commits.append(commitment)
-
-            return (ciphers, commits)
+        return (ciphers, commits)
 
     def verify_fake_set(self, fake_indices, fake_blinds):
+        """
+        Verify that fake blinds correspond to the fake values.
+
+        Arguments:
+            fake_indices (list): An integer list that indicates the indices of the
+                                 fake puzzles.
+            fake_blinds (list): The fake values that were used to generate the
+                                fake puzzles.
+                                Have to be of same size as rsa key.
+
+        Returns:
+            The keys used to encrypt the fake puzzles
+            if the fake_blinds^pk == fake puzzles, or None.
+        """
         if len(fake_indices) != len(fake_blinds) or len(fake_blinds) != self.n:
             return None
 
@@ -236,6 +351,20 @@ class PuzzleSolverServer(Puzzle_Solver):
         return [self.keys[x] for x in fake_indices]
 
     def verify_real_set(self, puzzle, real_indices, real_blinds):
+        """
+        Verify that the real puzzles all unblind to one puzzle.
+
+        Arguments:
+            puzzle (str): The puzzle that was blinded with real_blinds
+            real_indices (list): An integer list that indicates the indices of the
+                                 real puzzles.
+            real_blinds (list): The real values that were used to generate the
+                                real puzzles.
+
+        Returns:
+            The keys used to encrypt the real puzzles
+            if the puzzle x real_blinds^pk == real puzzles, or None.
+        """
         if len(real_blinds) != self.m:
             return None
 
