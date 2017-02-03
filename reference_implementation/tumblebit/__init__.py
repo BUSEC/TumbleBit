@@ -104,6 +104,9 @@ _ssl.BN_gcd.restype = ctypes.c_int
 _ssl.BN_gcd.argtypes = [ctypes.c_void_p, ctypes.c_void_p,
                         ctypes.c_void_p, ctypes.c_void_p]
 
+_ssl.BN_ucmp.restype = ctypes.c_int
+_ssl.BN_ucmp.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+
 ##################
 ## Conversions
 ##################
@@ -350,7 +353,7 @@ def get_random(bits, mod=None):
 
         while _ssl.BN_gcd(ret, r, mod, ctx) != 1:
             logging.debug("R is not a relative prime")
-            if _ssl.BN_rand_range(r, n) == 0:
+            if _ssl.BN_rand_range(r, mod) == 0:
                 logging.debug("get_random: failed to generate random number")
                 return None
 
@@ -359,12 +362,10 @@ def get_random(bits, mod=None):
             logging.debug("get_random: failed to generate random number")
             return None
 
-    r_len = BN_num_bytes(r)
-    rand = ctypes.create_string_buffer(r_len)
-    _ssl.BN_bn2bin(r, rand)
+    rand =  BNToBin(r, bits//8)
 
     _ssl.BN_free(r)
     _ssl.BN_CTX_end(ctx)
     _ssl.BN_CTX_free(ctx)
 
-    return rand.raw[:r_len]
+    return rand
