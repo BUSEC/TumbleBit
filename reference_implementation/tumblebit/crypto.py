@@ -9,11 +9,26 @@ def ripemd160(msg):
     h.update(msg)
     return h.digest()
 
-
 def sha256(msg):
     h = hashlib.sha256()
     h.update(msg)
     return h.digest()
+
+def hash256(msg):
+    return sha256(sha256(msg))
+
+def sha512(msg):
+    h = hashlib.sha512()
+    h.update(msg)
+    return h.digest()
+
+def hmac_sha256(msg, key):
+    h = hashlib.hmac(key, msg, hashlib.sha256)
+    return h.digest()
+
+
+def xor_bytes(a, b) :
+    return bytes(x ^ y for x, y in zip(a, b))
 
 
 def chacha(key, iv, msg):
