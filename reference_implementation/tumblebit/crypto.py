@@ -1,5 +1,6 @@
 import ctypes
 import hashlib
+import hmac
 
 from tumblebit import _ssl, ChaCha_ctx
 
@@ -23,7 +24,7 @@ def sha512(msg):
     return h.digest()
 
 def hmac_sha256(msg, key):
-    h = hashlib.hmac(key, msg, hashlib.sha256)
+    h = hmac.new(key, msg, hashlib.sha256)
     return h.digest()
 
 
