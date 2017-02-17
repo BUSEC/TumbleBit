@@ -27,8 +27,6 @@ _libc.fclose.argtypes = [ctypes.c_void_p]
 ########################################################
 
 # Change path to where libressl library is
-# TODO: Add an option to specify the path in some sort of
-#       config file.
 if(platform.system() == "Darwin"):
 
     # Was libressl installed using homebrew?
@@ -283,6 +281,28 @@ _ssl.ChaCha.restype = None
 _ssl.ChaCha.argtypes = [ctypes.c_void_p, ctypes.c_void_p,
                         ctypes.c_void_p, ctypes.c_uint]
 
+#####################################
+## EC
+#####################################
+
+class ECDSA_SIG_st(ctypes.Structure):
+    _fields_ = [("r", ctypes.c_void_p),
+                ("s", ctypes.c_void_p)]
+    def __del__(self):
+        _ssl.BN_free(self.r)
+        _ssl.BN_free(self.s)
+
+
+_ssl.ECDSA_SIG_free.restype = None
+_ssl.ECDSA_SIG_free.argtypes = [ctypes.c_void_p]
+
+_ssl.d2i_ECDSA_SIG.restype = ctypes.c_void_p
+_ssl.d2i_ECDSA_SIG.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long]
+
+_ssl.i2d_ECDSA_SIG.restype = ctypes.c_int
+_ssl.i2d_ECDSA_SIG.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+
+
 ###########################################################################
 ## Helpers
 ###########################################################################
@@ -328,6 +348,22 @@ def BNToBin(bn, size):
         data[i] = 0
 
     return data.raw[:size]
+
+def BinToBN(s):
+    """
+    Converts a binary string into a BN instance.
+
+    Returns:
+        A BN instance, or none if the conversion failed.
+    """
+    bn = _ssl.BN_new()
+
+    ret = _ssl.BN_bin2bn(s, len(s), bn)
+
+    if ret is None:
+        return None
+
+    return bn
 
 
 def get_random(bits, mod=None):
