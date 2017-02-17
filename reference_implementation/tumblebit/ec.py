@@ -30,6 +30,9 @@ class EC(object):
             self.init = True
             self.is_private = True
 
+    def get_pubkey(self):
+        return self.key.get_pubkey()
+
 
     def sign(self, msg):
         if self.init:
