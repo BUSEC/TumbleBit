@@ -38,7 +38,6 @@ class EC(object):
         if self.init:
             if self.is_private:
                 sig = self.key.sign(msg)
-                print("Signature(%d) is %s" % (len(sig), sig))
                 return sig
             else:
                 raise ValueError('Signing requires a private key')
