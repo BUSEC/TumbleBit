@@ -1,9 +1,9 @@
-import logging
 import ctypes
+import logging
 
 from Crypto.Util import asn1
 
-from tumblebit import (_ssl, _libc, _free_bn, RSA_F4, RSA_NO_PADDING,
+from . import (_ssl, _libc, _free_bn, RSA_F4, RSA_NO_PADDING,
                        BNToBin, LibreSSLException)
 
 
@@ -166,11 +166,11 @@ class RSA:
         if self.path == '' or self.suffix == '':
             return False
 
-        file_path = self.path + "/public_%s.pem" % self.suffix
-        file_path = file_path.encode('utf-8')
+        file_path = self.path + '/public_%s.pem' % self.suffix
 
-        bp_public = _ssl.BIO_new_file(ctypes.c_char_p(file_path),
-                                      ctypes.c_char_p(b"w+"))
+
+        bp_public = _ssl.BIO_new_file(ctypes.c_char_p(file_path.encode('utf-8')),
+                                      ctypes.c_char_p(b'w+'))
         if _ssl.PEM_write_bio_RSAPublicKey(bp_public, self.key) != 1:
             logging.debug("Failed to write RSA Public Key")
             return False
@@ -189,14 +189,14 @@ class RSA:
         if self.path == '' or self.suffix == '':
             return False
 
-        file_path = self.path + "/private_%s.pem" % self.suffix
-        file_path = file_path.encode('utf-8')
+        file_path = self.path + '/private_%s.pem' % self.suffix
 
-        bp_private = _ssl.BIO_new_file(ctypes.c_char_p(file_path),
-                                       ctypes.c_char_p(b"w+"))
+
+        bp_private = _ssl.BIO_new_file(ctypes.c_char_p(file_path.encode('utf-8')),
+                                       ctypes.c_char_p(b'w+'))
         if _ssl.PEM_write_bio_RSAPrivateKey(bp_private, self.key, None, None,
                                             0, None, None) != 1:
-            logging.debug("Failed to write RSA Private Key")
+            logging.debug('Failed to write RSA Private Key')
             return False
 
         _ssl.BIO_free_all(bp_private)
@@ -213,10 +213,10 @@ class RSA:
         if self.path == '' or self.suffix == '':
             return False
 
-        file_path = self.path + "/public_%s.pem" % self.suffix
-        file_path = file_path.encode('utf-8')
-        p_file = _libc.fopen(ctypes.c_char_p(file_path),
-                             ctypes.c_char_p(b"r"))
+        file_path = self.path + '/public_%s.pem' %  self.suffix
+
+        p_file = _libc.fopen(ctypes.c_char_p(file_path.encode('utf-8')),
+                             ctypes.c_char_p(b'r'))
 
         _ssl.PEM_read_RSAPublicKey(p_file, ctypes.byref(self.key), None, None)
 
@@ -246,11 +246,10 @@ class RSA:
         # Load public key
         self.load_public_key(from_private=True)
 
-        file_path = self.path + "/private_%s.pem" % self.suffix
-        file_path = file_path.encode('utf-8')
+        file_path = self.path + '/private_%s.pem' % self.suffix
 
-        p_file = _libc.fopen(ctypes.c_char_p(file_path),
-                             ctypes.c_char_p(b"r"))
+        p_file = _libc.fopen(ctypes.c_char_p(bytes(file_path.encode('utf-8'))),
+                             ctypes.c_char_p(b'r'))
 
         _ssl.PEM_read_RSAPrivateKey(p_file, ctypes.byref(self.key), None, None)
 
@@ -368,7 +367,7 @@ class RSA:
         try:
             return Blind(r, self.bn_e, self.bn_n)
         except (LibreSSLException, AssertionError) as e:
-            logging.debug("setup_blinding failed.")
+            logging.debug('setup_blinding failed.')
             return None
 
     def blind(self, msg, blind):
@@ -392,7 +391,7 @@ class RSA:
         f = _ssl.BN_bin2bn(msg, len(msg), _ssl.BN_new())
 
         if _ssl.BN_mod_mul(f, f, blind.bn_A, self.bn_n, ctx) != 1:
-            logging.debug("Failed to blind msg")
+            logging.debug('Failed to blind msg')
             _ssl.BN_free(f)
             _ssl.BN_CTX_free(ctx)
             return None
@@ -425,7 +424,7 @@ class RSA:
         f = _ssl.BN_bin2bn(msg, len(msg), _ssl.BN_new())
 
         if _ssl.BN_mod_mul(f, f, blind.bn_Ai, self.bn_n, ctx) != 1:
-            logging.debug("Failed to unblind msg")
+            logging.debug('Failed to unblind msg')
             _ssl.BN_free(f)
             _ssl.BN_CTX_free(ctx)
             return None
@@ -458,7 +457,7 @@ class RSA:
         f = _ssl.BN_bin2bn(msg, len(msg), _ssl.BN_new())
 
         if _ssl.BN_mod_mul(f, f, blind.bn_ri, self.bn_n, ctx) != 1:
-            logging.debug("Failed to unblind msg")
+            logging.debug('Failed to unblind msg')
             _ssl.BN_free(f)
             _ssl.BN_CTX_free(ctx)
             return None

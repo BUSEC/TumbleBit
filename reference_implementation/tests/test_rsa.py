@@ -4,25 +4,25 @@ from tumblebit.rsa import RSA
 from tumblebit import get_random
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope='session')
 def key_path(tmpdir_factory):
     path = tmpdir_factory.mktemp('test_rsa', numbered=False)
     return str(path)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope='module')
 def rsa_gen(key_path):
-    return RSA(key_path, "test")
+    return RSA(key_path, 'test')
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope='module')
 def private_rsa(key_path):
-    return RSA(key_path, "test")
+    return RSA(key_path, 'test')
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope='module')
 def public_rsa(key_path):
-    return RSA(key_path, "test")
+    return RSA(key_path, 'test')
 
 
 class TestRSA:
@@ -44,17 +44,17 @@ class TestRSA:
         rsa_size = public_rsa.size
 
         # Should get valid sig if msg == rsa_size
-        msg = b"01" * (rsa_size // 2)
+        msg = b'01' * (rsa_size // 2)
         sig = private_rsa.sign(msg)
         assert public_rsa.verify(msg, sig)
 
         # If msg != RSA_size(), no sig is produced
-        msg2 = b"1" * (256 // 2)
+        msg2 = b'1' * (256 // 2)
         sig2 = private_rsa.sign(msg2)
         assert sig2 is None
 
     def test_blinding(self, private_rsa, public_rsa):
-        msg = b"01" * (256 // 2)
+        msg = b'01' * (256 // 2)
         r = get_random(2048)
         blind = public_rsa.setup_blinding(r)
         assert blind is not None
