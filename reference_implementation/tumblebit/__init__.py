@@ -401,6 +401,7 @@ def get_random(bits, mod=None):
     rand =  BNToBin(r, bits//8)
 
     _ssl.BN_free(r)
+    _ssl.BN_free(ret)
     _ssl.BN_CTX_end(ctx)
     _ssl.BN_CTX_free(ctx)
 
