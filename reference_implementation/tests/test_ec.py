@@ -10,18 +10,21 @@ base_path = os.path.dirname(__file__) + '/test_data/server_ec_keys/'
 def test_ec():
     ec_key = EC()
 
-    ec_key.load_public_key(base_path + 'ec_pubkey.der')
+    ec_key.load_public_key(base_path + 'ec_pubkey.bin')
     assert ec_key.is_private == False
 
     ec_key.load_private_key(base_path + 'ec_privkey.der')
     assert ec_key.is_private == True
 
 def test_signing():
-    ec_key = EC()
-    ec_key.load_private_key(base_path + 'ec_privkey.der')
+    ec_privkey = EC()
+    ec_privkey.load_private_key(base_path + 'ec_privkey.der')
 
     msg = sha256(b'test_data')
-    sig = ec_key.sign(msg)
+    sig = ec_privkey.sign(msg)
+
+    ec_key = EC()
+    ec_key.load_public_key(base_path + 'ec_pubkey.bin')
 
     assert ec_key.verify(msg, sig)
 

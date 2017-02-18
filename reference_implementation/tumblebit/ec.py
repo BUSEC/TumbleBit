@@ -2,7 +2,7 @@ import ctypes
 
 from bitcoin.core.key import  CECKey
 
-from tumblebit import _ssl, ECDSA_SIG_st, BNToBin, BinToBN
+from . import _ssl, ECDSA_SIG_st, BNToBin, BinToBN
 
 
 class EC(object):
@@ -46,7 +46,7 @@ class EC(object):
 
     def verify(self, msg, sig):
         if self.init:
-            return self.key.verify(msg, sig)
+            return self.key.verify(msg, sig) == 1
         else:
             raise ValueError('No key is loaded.')
 
