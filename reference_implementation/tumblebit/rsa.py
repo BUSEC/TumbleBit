@@ -102,6 +102,15 @@ class RSA:
         _ssl.RSA_free(self.key)
         [_free_bn(x) for x in self.bn_list]
 
+    def compare_mod(self, rand):
+        """ Returns the result of comparing rand to the rsa mod"""
+
+        # Convert to bn
+        rand_bn = _ssl.BN_new()
+        rand_bn = _ssl.BN_bin2bn(rand, len(rand), self.rand_bn)
+
+        return _ssl.BN_ucmp(self.bn_n, rand_bn)
+
     def _get_mod(self):
         """ Returns the modulus of the RSA key in bn form."""
         buf = ctypes.create_string_buffer(1024)
