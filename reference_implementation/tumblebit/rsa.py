@@ -107,9 +107,13 @@ class RSA:
 
         # Convert to bn
         rand_bn = _ssl.BN_new()
-        rand_bn = _ssl.BN_bin2bn(rand, len(rand), self.rand_bn)
+        rand_bn = _ssl.BN_bin2bn(rand, self.size, rand_bn)
 
-        return _ssl.BN_ucmp(self.bn_n, rand_bn)
+        result = _ssl.BN_ucmp(rand_bn, self.bn_n)
+
+        _ssl.BN_free(rand_bn)
+
+        return result
 
     def _get_mod(self):
         """ Returns the modulus of the RSA key in bn form."""
