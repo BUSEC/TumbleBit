@@ -9,8 +9,8 @@ tumblebit paper.
 import random
 
 from tumblebit.rsa import RSA
-from tumblebit.crypto import chacha, ripemd160
-from tumblebit import BNToBin, get_random
+from tumblebit.crypto import chacha, ripemd160, get_random
+from tumblebit import BNToBin
 
 class PuzzleSolver(object):
     """

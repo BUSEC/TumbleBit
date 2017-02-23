@@ -1,18 +1,29 @@
+# -*- coding: utf-8 -*-
+
+"""
+tumblebit.rsa
+~~~~~~~~~~~~~
+
+This module provides the capabilities to use
+rsa and blinded rsa operations.
+
+"""
+
 import ctypes
 import logging
 
 from Crypto.Util import asn1
 
-from . import (_ssl, _libc, _free_bn, RSA_F4, RSA_NO_PADDING,
+from tumblebit import (_ssl, _libc, _free_bn, RSA_F4, RSA_NO_PADDING,
                        BNToBin, LibreSSLException)
 
 
-class Blind:
+class Blind(object):
     """
     A class that stores a blind value in various forms.
 
     Attributes:
-        r: The blind value
+        r:     The blind value
         bn_r:  A bn instance -- r
         bn_Ai: A bn instance -- (r^-1)
         bn_A:  A bn instance -- r^pk
@@ -45,26 +56,28 @@ class Blind:
         """
         Frees up attributes
         """
-        [_free_bn(x) for x in self._free]
+        for x in self._free:
+            _free_bn(x)
 
 
-class RSA:
+class RSA(object):
     """
     A class that wraps RSA blind signing functionality.
 
-    Messages to be signed have to be the same size as
-    the RSA key.
+    Note:
+        Messages to be signed or encrypted have to be the same size as
+        the RSA key. Encryption doesn't add any padding.
 
     Attributes:
         key: The rsa key
-        size: int - rsa key size
-        is_private: boolean - true if key is a private key
+        size (int): rsa key size
+        is_private (bool): is this a private key
         bn_n: A bn instance - rsa mod
         bn_e: A bn instance - rsa exponent
         blinding: A BN_Blinding instance - blinding factor to be used
                   in blind/unblind
-        path: A string - path to folder where key is saved/loaded
-        suffix: Suffix added to key name (public_suffix.pem/private_suffix.pem)
+        path (bytes): Path to folder where key is saved/loaded
+        suffix (bytes): Suffix added to key name (public_suffix.pem/private_suffix.pem)
     """
 
     def __init__(self, path="", suffix=""):
@@ -100,7 +113,8 @@ class RSA:
         Frees up attributes
         """
         _ssl.RSA_free(self.key)
-        [_free_bn(x) for x in self.bn_list]
+        for x in self.bn_list:
+            _free_bn(x)
 
     def compare_mod(self, rand):
         """ Returns the result of comparing rand to the rsa mod"""
@@ -135,7 +149,7 @@ class RSA:
         Generate RSA key of size bits.
 
         Args:
-            bits: An int - the size of the key. Has to be divisible by 8.
+            bits (int): The size of the key. Has to be divisible by 8.
 
         Returns:
             True on success, False otherwise
@@ -238,7 +252,7 @@ class RSA:
         Loads private key and public key from path.
 
         Returns:
-            True on success, False otherwise
+            True on successs, False otherwise
         """
 
         if self.path == '' or self.suffix == '':
@@ -270,7 +284,7 @@ class RSA:
         Signs msg using rsa private key.
 
         Args:
-            msg: A string - message to be signed. len(msg) must equal self.size
+            msg (bytes): Message to be signed. len(msg) must equal self.size
 
         Returns:
             The signature on success, None otherwise
@@ -292,8 +306,8 @@ class RSA:
         Verifies the rsa signature of the message
 
         Args:
-            msg: A string - message to be signed. len(msg) must equal self.size
-            sig: A string - message signature. len(sig) must equal self.size
+            msg (bytes): Message to be signed. len(msg) must equal self.size
+            sig (bytes): Message signature. len(sig) must equal self.size
 
         Returns:
             True on success, False otherwise
@@ -314,7 +328,7 @@ class RSA:
         Encrypts msg using rsa public key.
 
         Args:
-            msg: A string - message to be signed. len(msg) must equal self.size
+            msg (bytes): Message to be signed.
 
         Returns:
             The encrypted msg on success, None otherwise
@@ -336,7 +350,7 @@ class RSA:
         Decrypts a msg using the private key
 
         Args:
-            msg: A string - Encrypted message. len(msg) must equal self.size
+            msg (bytes): Encrypted message.
 
         Returns:
             True on success, False otherwise
@@ -357,17 +371,16 @@ class RSA:
         Sets up a Blind using r.
 
         Args:
-            r: A string - random value to used as a blind.
-               len(r) must equal self.size
+            r (bytes): Random value to used as a blind.
 
         Returns:
-            returns a blinding structure on success, None otherwise
+             A blinding structure on success, None otherwise
         """
 
         try:
             return Blind(r, self.bn_e, self.bn_n)
-        except (LibreSSLException, AssertionError) as e:
-            logging.debug('setup_blinding failed.')
+        except (LibreSSLException, AssertionError):
+            logging.debug('setup_blinding failed')
             return None
 
     def blind(self, msg, blind):
@@ -375,8 +388,7 @@ class RSA:
         Blinds a msg.
 
         Args:
-            msg: A string - message to be blinded.
-               len(msg) must equal self.size
+            msg (bytes): Message to be blinded.
             blind: The blind that was used on the msg. instance of Blind
 
 
@@ -384,7 +396,7 @@ class RSA:
             A byte string of the blinded msg on success, None otherwise
         """
 
-        if(len(msg) != self.size or blind is None):
+        if len(msg) != self.size or blind is None:
             return None
 
         ctx = _ssl.BN_CTX_new()
@@ -408,8 +420,7 @@ class RSA:
         Unblinds a msg.
 
         Args:
-            msg: A string - a blinded message.
-               len(msg) must equal self.size
+            msg (bytes): A blinded message.
             blind: The blind that was used on the msg. instance of Blind
 
 
@@ -417,7 +428,7 @@ class RSA:
             A byte string of the unblinded msg on success, None otherwise
         """
 
-        if(len(msg) != self.size or blind is None):
+        if len(msg) != self.size or blind is None:
             return None
 
         ctx = _ssl.BN_CTX_new()
@@ -442,15 +453,14 @@ class RSA:
         Removes a blind r from the message.
 
         Args:
-            msg: A string - a blinded message.
-               len(msg) must equal self.size
+            msg (bytes): A blinded message.
             blind: The blind that was used on the msg. instance of Blind
 
         Returns:
             A byte string of the unblinded msg on success, None otherwise
         """
 
-        if(len(msg) != self.size or blind is None):
+        if len(msg) != self.size or blind is None:
             return None
 
         ctx = _ssl.BN_CTX_new()

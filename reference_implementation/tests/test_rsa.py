@@ -1,7 +1,7 @@
 import pytest
 import binascii
 from tumblebit.rsa import RSA
-from tumblebit import get_random
+from tumblebit.crypto import get_random
 
 
 @pytest.fixture(scope='session')

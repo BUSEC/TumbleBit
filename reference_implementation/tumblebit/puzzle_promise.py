@@ -9,9 +9,9 @@ tumblebit paper.
 import random
 from binascii import hexlify
 
-from . import _ssl, get_random, BinToBN, BNToBin
+from . import _ssl, BinToBN, BNToBin
 from .tx import setup_escrow, get_unsigned_tx
-from .crypto import hash256, hmac_sha256, sha512, xor_bytes
+from .crypto import hash256, hmac_sha256, sha512, xor_bytes, get_random
 from .rsa import RSA
 from .ec import EC
 
@@ -350,7 +350,7 @@ class PuzzlePromiseServer(PuzzlePromise):
             j2 = self.R[i + 1]
             q1 = self.epsilons[j]
             q2 = self.epsilons[j2]
-            
+
             quotients.append(self.get_quotient(q1, q2))
 
         return quotients
