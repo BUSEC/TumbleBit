@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 """
 tumblebit.puzzle_solver
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -55,8 +57,8 @@ class PuzzleSolver(object):
         """Encrypts the msg using chacha20
 
         Args:
-            key (str): A 16 byte key that will be used for encryption.
-            msg (str): A message to be encrypted
+            key (bytes): A 16 byte key that will be used for encryption.
+            msg (bytes): A message to be encrypted
 
         Returns:
             str: A string where the first 8 bytes represent the iv
@@ -67,7 +69,6 @@ class PuzzleSolver(object):
             ValueError: If `key` is not 16 bytes
         """
         if len(key) != 16:
-            print("Length of key is %d" % len(key))
             raise ValueError('key must be 16 bytes')
 
         iv = PuzzleSolver.compute_rand(64)  # 8 byte iv
@@ -79,8 +80,8 @@ class PuzzleSolver(object):
         """Decrypts the msg using chacha20
 
         Args:
-            key (str): A 16 byte key that will be used for decryption.
-            cipher (str): A message to be decrypted
+            key (bytes): A 16 byte key that will be used for decryption.
+            cipher (bytes): A message to be decrypted
 
         Returns:
             str: The decrypted msg
@@ -118,7 +119,7 @@ class PuzzleSolverClient(PuzzleSolver):
 
     Attributes:
         rsa_key (:obj:`RSA`): The tumbler's public RSA key
-        puzzle (str): The rsa puzzle to be solved by the tumbler
+        puzzle (bytes): The rsa puzzle to be solved by the tumbler
         m (:obj:`int`, optional): The number of real values
         n (:obj:`int`, optional): The number of fake values
 
@@ -141,6 +142,13 @@ class PuzzleSolverClient(PuzzleSolver):
 
         self.puzzle = puzzle
 
+        self.puzzle_set = []
+        self.real_blinds = []
+        self.fake_blinds = []
+
+        self.R = []
+        self.F = []
+
     def prepare_puzzle_set(self):
         """ Prepares a puzzle set of length `n` + `m`
 
@@ -154,8 +162,7 @@ class PuzzleSolverClient(PuzzleSolver):
 
         # Prepare reals
         reals = []
-        self.real_blinds = []
-        for i in range(self.m):
+        for _ in range(self.m):
             r = self.compute_rand(bits)
             blind = self.key.setup_blinding(r)
             blinded_val = self.key.blind(self.puzzle, blind)
@@ -166,8 +173,7 @@ class PuzzleSolverClient(PuzzleSolver):
 
         # Prepare fakes
         fakes = []
-        self.fake_blinds = []
-        for i in range(self.n):
+        for _ in range(self.n):
             r = self.get_rand_mod(bits)
             r_pk = self.key.encrypt(r)
             if r_pk is None:
@@ -278,6 +284,9 @@ class PuzzleSolverServer(PuzzleSolver):
     def __init__(self, rsa_key, m=15, n=285):
         super(PuzzleSolverServer, self).__init__(rsa_key, m, n)
 
+        self.puzzles = None
+        self.keys = None
+
         if not rsa_key.is_private:
             raise ValueError("rsa_key for the server must be a private key.")
 
@@ -345,7 +354,7 @@ class PuzzleSolverServer(PuzzleSolver):
 
             r = self.key.setup_blinding(fake_blinds[i])
             temp = BNToBin(r.bn_A, self.key.size)
-            if BNToBin(r.bn_A, self.key.size) != self.puzzles[fake_indices[i]]:
+            if temp != self.puzzles[fake_indices[i]]:
                 return None
 
         return [self.keys[x] for x in fake_indices]
@@ -355,7 +364,7 @@ class PuzzleSolverServer(PuzzleSolver):
         Verify that the real puzzles all unblind to one puzzle.
 
         Arguments:
-            puzzle (str): The puzzle that was blinded with real_blinds
+            puzzle (bytes): The puzzle that was blinded with real_blinds
             real_indices (list): An integer list that indicates the indices of the
                                  real puzzles.
             real_blinds (list): The real values that were used to generate the
