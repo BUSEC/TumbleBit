@@ -1,3 +1,16 @@
+# -*- coding: utf-8 -*-
+
+"""
+Tumblebit
+~~~~~~~~~
+
+This module has:
+    - the ctype declarations for interfacing
+      with Libressl.
+    - Helper methods to convert back from structures
+"""
+
+
 import os
 import sys
 import logging
@@ -27,7 +40,7 @@ _libc.fclose.argtypes = [ctypes.c_void_p]
 ########################################################
 
 # Change path to where libressl library is
-if(platform.system() == "Darwin"):
+if platform.system() == "Darwin":
 
     # Was libressl installed using homebrew?
     path = "/usr/local/opt/libressl/lib/libssl.dylib"
@@ -46,6 +59,9 @@ _ssl.SSL_load_error_strings()
 
 
 class LibreSSLException(OSError):
+    """
+    Represents an error that originated from LibreSSL
+    """
     pass
 
 
@@ -57,7 +73,8 @@ def _check_res_void_p(val, func, args):
         errno = _ssl.ERR_get_error()
         errmsg = ctypes.create_string_buffer(120)
         _ssl.ERR_error_string_n(errno, errmsg, 120)
-        raise LibreSSLException(errno, str(errmsg.value))
+        msg = str(func.__name__) + '(' + ','.join(args) + '): '
+        raise LibreSSLException(errno, msg + str(errmsg.value))
 
     return ctypes.c_void_p(val)
 
@@ -343,7 +360,11 @@ def BNToBin(bn, size):
 
     data = ctypes.create_string_buffer(size)
     offset = size - BN_num_bytes(bn)
+
     ret = _ssl.BN_bn2bin(bn, ctypes.byref(data, offset))
+    if ret == 0:
+        return None
+
     for i in range(offset):
         data[i] = 0
 
@@ -364,45 +385,3 @@ def BinToBN(s):
         return None
 
     return bn
-
-
-def get_random(bits, mod=None):
-    """
-    Returns a random byte string of size bits/8 bytes.
-
-    Args:
-        bits: An int
-        mod: A BN instance
-    Returns:
-        A byte strings of length bits/8 or None if an error occured
-        If mod is set the random byte string will have a value < mod
-    """
-    ctx = _ssl.BN_CTX_new()
-    _ssl.BN_CTX_start(ctx)
-    r = _ssl.BN_CTX_get(ctx)
-    ret = _ssl.BN_CTX_get(ctx)
-
-    if mod:
-        if _ssl.BN_rand_range(r, mod) == 0:
-            logging.debug("get_random: failed to generate random number")
-            return None
-
-        while _ssl.BN_gcd(ret, r, mod, ctx) != 1:
-            logging.debug("R is not a relative prime")
-            if _ssl.BN_rand_range(r, mod) == 0:
-                logging.debug("get_random: failed to generate random number")
-                return None
-
-    else:
-        if _ssl.BN_rand(r, bits, 0, 1) == 0:
-            logging.debug("get_random: failed to generate random number")
-            return None
-
-    rand =  BNToBin(r, bits//8)
-
-    _ssl.BN_free(r)
-    _ssl.BN_free(ret)
-    _ssl.BN_CTX_end(ctx)
-    _ssl.BN_CTX_free(ctx)
-
-    return rand
