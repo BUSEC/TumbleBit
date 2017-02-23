@@ -1,3 +1,14 @@
+# -*- coding: utf-8 -*-
+
+"""
+tumblebit.ec
+~~~~~~~~~~~~
+
+This module provides the capabilities to use
+sign/verify messages using EC keys
+
+"""
+
 import ctypes
 
 from bitcoin.core.key import CECKey
@@ -17,7 +28,7 @@ class EC(object):
 
     def load_public_key(self, key_path):
         """
-
+        Loads a public key from file at `key_path`
         """
         with open(key_path, 'rb') as f:
             temp_key = f.read()
@@ -26,6 +37,9 @@ class EC(object):
             self.init = True
 
     def load_private_key(self, key_path):
+        """
+        Loads a private key from file at `key_path`
+        """
         with open(key_path, 'rb') as f:
             temp_key = f.read()
             self.key.set_privkey(temp_key)
@@ -34,10 +48,23 @@ class EC(object):
             self.is_private = True
 
     def get_pubkey(self):
+        """
+        Returns an octet byte string representing
+        the EC public key
+        or None if no public key has been loaded.
+        """
+        if not self.init:
+            return None
         return self.key.get_pubkey()
 
 
     def sign(self, msg):
+        """
+        Sign `msg` using EC private key
+
+        Raises:
+            ValueError: If private key is not loaded.
+        """
         if self.init:
             if self.is_private:
                 sig = self.key.sign(msg)
@@ -48,6 +75,12 @@ class EC(object):
             raise ValueError('No key is loaded.')
 
     def verify(self, msg, sig):
+        """
+        Sign `msg` using EC private key
+
+        Raises:
+            ValueError: If no key is loaded.
+        """
         if self.init:
             return self.key.verify(msg, sig) == 1
         else:
@@ -65,7 +98,7 @@ class EC(object):
         p_sig = ctypes.byref(ctypes.c_char_p(sig))
         _ssl.d2i_ECDSA_SIG(p_sig_struct, p_sig, len(sig))
 
-        r = BNToBin(sig_struct.r,  32)
+        r = BNToBin(sig_struct.r, 32)
         s = BNToBin(sig_struct.s, 32)
 
         return r + s
@@ -79,7 +112,7 @@ class EC(object):
                                 is 32 bytes
 
         Returns:
-            A signature in der format
+            A signature in DER format
 
         Raises:
             Value error if serial sig is not 64 bytes
