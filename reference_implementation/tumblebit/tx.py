@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 """
 tumblebit.tx
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -24,14 +26,23 @@ SelectParams('testnet')
 
 def get_unsigned_tx(funding_tx, redeem_script, address, amount,
                     lock_time=0, n_sequence=0, vout=0):
-    '''
-           Returns a raw transaction and it's signature hash
-           that pays to address from funding_tx
+    """
+    Returns a raw transaction and it's signature hash
+    that pays to address from funding_tx
 
-           Options:
-           vout -> which vout of funding_tx
-           nLockTime -> set's transaction locktime
-    '''
+    Arguments:
+        funding_tx (str): the 'input' tx
+        redeem_script (str): The redeem script
+        address (str): The output address that would receive `amount`
+        lock_time (int, optional): The time the tx should be locked to
+        n_sequence (int, optional): The sequence number to use in tx
+        vout (int, optional):  The index of the output point of `funding_tx`
+
+    Returns:
+        A tuple containing:
+            1/ The serial tx
+            2/ The tx hash
+    """
 
     # Set P2SH funding tx in little-endian
     fx = lx(funding_tx)
@@ -66,12 +77,12 @@ def get_unsigned_tx(funding_tx, redeem_script, address, amount,
 ########################################################
 
 
-def setup_escrow(payer_pubkey, redeemer_pubkey, amount, lock_time):
-    '''
-        Setups a 2of2 escrow with payer and redeemer
-        Also, sends a tx funding the escrow
-        (Assumes payer calls the setup)
-    '''
+def setup_escrow(payer_pubkey, redeemer_pubkey, lock_time):
+    """
+    Setups a 2of2 escrow with payer and redeemer
+    Also, sends a tx funding the escrow
+    (Assumes payer calls the setup)
+    """
 
     redeem_script = CScript([OP_DEPTH, 3, OP_EQUAL,  # Fixes a txid malliablity issue thanks to Nicolas
                             OP_IF, OP_2, payer_pubkey, redeemer_pubkey,
@@ -93,9 +104,9 @@ def setup_escrow(payer_pubkey, redeemer_pubkey, amount, lock_time):
 
 
 def spend_escrow(serial_tx, redeem_script, payer_sig, redeemer_sig):
-    '''
+    """
         Sends a transaction fulfilling the redeem script of escrow tx
-    '''
+    """
     # Read in transaction
     temp_tx = CTransaction.deserialize(serial_tx)
     tx = CMutableTransaction.from_tx(temp_tx)

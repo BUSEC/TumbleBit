@@ -52,7 +52,7 @@ def test_puzzle_promise():
     client = PuzzlePromiseClient(rsa_key, server_ec_pubkey, client_ec_key)
 
     # Step 1. Setup Escrow
-    redeem_script, p2sh_address = server.prepare_escrow(AMOUNT, 0)
+    redeem_script, p2sh_address = server.prepare_escrow(0)
     server.set_funding_tx(FUNDING_TX)
 
     # Steps 2 - 4 : Prepare tx set

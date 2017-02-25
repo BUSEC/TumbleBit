@@ -366,7 +366,7 @@ class PuzzlePromiseServer(PuzzlePromise):
         if not ec_key.is_private:
             raise ValueError("ec_key for the server must be a private key.")
 
-    def prepare_escrow(self, amount, timelock):
+    def prepare_escrow(self, timelock):
         """ Creates the escrow transaction.
 
         Creates the escrow p2sh address offering `amount` to a
@@ -389,7 +389,7 @@ class PuzzlePromiseServer(PuzzlePromise):
         pubkey = self.ec_key.get_pubkey()
         self.redeem_script, self.p2sh_address = setup_escrow(pubkey,
                                                 self.client_pubkey,
-                                                amount, timelock)
+                                                timelock)
 
         return (self.redeem_script, self.p2sh_address)
 
