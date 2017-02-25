@@ -1,5 +1,9 @@
-import pytest
+# -*- coding: utf-8 -*-
+
 import binascii
+
+import pytest
+
 from tumblebit.rsa import RSA
 from tumblebit.crypto import get_random
 

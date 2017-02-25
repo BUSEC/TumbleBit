@@ -1,5 +1,6 @@
-import os
+# -*- coding: utf-8 -*-
 
+import os
 import pytest
 
 
@@ -19,7 +20,7 @@ def test_puzzle_promise():
     ## Key Setup
     #####################################
 
-    base_path =  os.path.dirname(__file__) + '/test_data/'
+    base_path = os.path.dirname(__file__) + '/test_data/'
 
     # Setup Tumbler keys
     server_ec_path = base_path + 'server_ec_keys/'
@@ -33,7 +34,7 @@ def test_puzzle_promise():
     rsa_key.load_public_key()
 
     # Setup Client EC key
-    client_ec_path =  base_path + 'client_ec_keys/'
+    client_ec_path = base_path + 'client_ec_keys/'
 
     client_ec_key = EC()
     client_ec_key.load_public_key(client_ec_path + 'ec_pubkey.bin')

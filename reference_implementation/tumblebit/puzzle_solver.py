@@ -10,9 +10,9 @@ tumblebit paper.
 
 import random
 
+from tumblebit import BNToBin
 from tumblebit.rsa import RSA
 from tumblebit.crypto import chacha, ripemd160, get_random
-from tumblebit import BNToBin
 
 class PuzzleSolver(object):
     """
@@ -123,12 +123,13 @@ class PuzzleSolverClient(PuzzleSolver):
         m (:obj:`int`, optional): The number of real values
         n (:obj:`int`, optional): The number of fake values
 
-        R (list): The indices of the real puzzle values in the puzzle set
-        F (list): The indices of the fake puzzle values in the puzzle set
-
         puzzle_set (list): A shuffled list of real/fake puzzles
         real_blinds (list): The random values used to blind the puzzle
         fake_blinds (list): The fake values that were blinded.
+
+        R (list): The indices of the real puzzle values in the puzzle set
+        F (list): The indices of the fake puzzle values in the puzzle set
+
 
     Raises:
         ValueError: If length of `puzzle` is not equal to rsa key size
