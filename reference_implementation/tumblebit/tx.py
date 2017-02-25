@@ -17,7 +17,7 @@ from bitcoin.core.scripteval import VerifyScript, SCRIPT_VERIFY_P2SH
 from bitcoin.core import (b2x, b2lx, lx, Hash, COIN, COutPoint, CMutableTxOut,
                           CMutableTxIn, CMutableTransaction, CTransaction,
                           ValidationError)
-from bitcoin.core.script import (CScript, SignatureHash, OP_0, OP_TRUE,
+from bitcoin.core.script import (CScript, SignatureHash, OP_0,
                                  OP_CHECKSIG, OP_CHECKMULTISIG, SIGHASH_ALL,
                                  OP_IF, OP_ELSE, OP_ENDIF, OP_RIPEMD160,
                                  OP_2, OP_CHECKLOCKTIMEVERIFY, OP_DROP,
@@ -74,6 +74,44 @@ def get_unsigned_tx(funding_tx, redeem_script, address, amount,
 
     return (tx.serialize(), sighash)
 
+def refund_tx(redeem_script, payer_sig, serial_tx):
+    """
+    Creates a transaction refunding the funder of the P2SH address.
+
+    Arguements:
+        redeem_script (bytes): The script that specifies the conditions that a tx has
+                        to fulfill to transfer funds from the `funding_tx`
+        payer_sig (bytes): The signature of the payer on the `serial_tx`
+        serial_tx (bytes): The serial transaction
+
+    Returns:
+        The serial raw transaction that passes the script verification
+    """
+    # Read in transaction
+    temp_tx = CTransaction.deserialize(serial_tx)
+    tx = CMutableTransaction.from_tx(temp_tx)
+
+    txin = tx.vin[0]
+
+    # Set script sig
+    txin.scriptSig = CScript([payer_sig + '\x01', redeem_script])
+
+    # Verify script
+    redeem_script = CScript(redeem_script)
+    try:
+        VerifyScript(txin.scriptSig, redeem_script.to_p2sh_scriptPubKey(),
+                 tx, 0, [SCRIPT_VERIFY_P2SH])
+    except ValidationError:
+        print("refund_tx: Script failed to verify")
+        return  None
+
+    serial_tx = tx.serialize()
+    txid = b2lx(Hash(serial_tx))
+
+    print("refund_tx: TXID is %s" % txid)
+    print("refund_tx: RAW TX is %s" % b2x(serial_tx))
+
+    return serial_tx
 
 ########################################################
 ## Escrow
@@ -128,9 +166,19 @@ def setup_escrow(payer_pubkey, redeemer_pubkey, lock_time):
     return (redeem_script, str(p2sh_address))
 
 
-def spend_escrow(serial_tx, redeem_script, payer_sig, redeemer_sig):
+def spend_escrow(redeem_script, payer_sig, redeemer_sig, serial_tx):
     """
-        Sends a transaction fulfilling the redeem script of escrow tx
+    Creates a transaction fulfilling the redeem script of the escrow P2SH.
+
+    Arguements:
+        redeem_script (bytes): The script that specifies the conditions that a tx has
+                        to fulfill to transfer funds from the `funding_tx`
+        payer_sig (bytes): The signature of the payer on the `serial_tx`
+        redeemer_sig (bytes): The signature of the redeemer on the `serial_tx`
+        serial_tx (bytes): The serial transaction
+
+    Returns:
+        The serial raw transaction that passes the script verification
     """
     # Read in transaction
     temp_tx = CTransaction.deserialize(serial_tx)
@@ -147,8 +195,13 @@ def spend_escrow(serial_tx, redeem_script, payer_sig, redeemer_sig):
     # Verify script
     redeem_script = CScript(redeem_script)
     serial_tx = tx.serialize()
-    VerifyScript(txin.scriptSig, redeem_script.to_p2sh_scriptPubKey(),
-                 tx, 0, [SCRIPT_VERIFY_P2SH])
+
+    try:
+        VerifyScript(txin.scriptSig, redeem_script.to_p2sh_scriptPubKey(),
+                  tx, 0, [SCRIPT_VERIFY_P2SH])
+    except ValidationError:
+        print("spend_escrow: Script failed to verify")
+        return  None
 
     serial_tx = tx.serialize()
     txid = b2lx(Hash(serial_tx))
@@ -232,7 +285,7 @@ def spend_preimage(redeem_script, preimages, redeemer_sig,
                         to fulfill to transfer funds from the `funding_tx`
         preimages (list): The preimages that hash into the hash values
                           specified in the `redeem_script`
-        redeemer_sig (bytes): The signature of the redeem on the `serial_tx`
+        redeemer_sig (bytes): The signature of the redeemer on the `serial_tx`
         serial_tx (bytes): The serial transaction
 
     Returns:
@@ -251,7 +304,7 @@ def spend_preimage(redeem_script, preimages, redeemer_sig,
 
     # Create script sig
     txin.scriptSig = CScript([redeemer_sig + '\x01'] + script +
-                             [OP_TRUE, redeem_script])
+                             [redeem_script])
 
     # Verify script
     redeem_script = CScript(redeem_script)
